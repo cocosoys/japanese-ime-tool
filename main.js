@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, clipboard } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { NameCollectionService } from './src/services/NameCollectionService.js';
@@ -132,6 +132,7 @@ ipcMain.handle('collect-from-html', async (_e, { html }) => {
       entries: entries.map((x) => x.toJSON()),
       htmlPath,
       jsonPath,
+      batch: path.basename(path.dirname(jsonPath)),  // 批次目录名，供 UI 刷新批次选择栏
       count: entries.length,
     };
   } catch (err) {
@@ -167,12 +168,77 @@ ipcMain.handle('import', async (_e, { config, entries, aliases }) => {
   }
 });
 
+// 候选位置冲突检测（导入前调用，返回调整信息供用户确认）
+ipcMain.handle('resolve-orders', async (_e, { config, entries, aliases }) => {
+  try {
+    const ents = (entries || []).map((d) => NameEntry.fromJSON(d));
+    const { records, adjustments } = await importer.buildRecordsWithResolution(ents, new ImportConfig(config), aliases);
+    return { records, adjustments };
+  } catch (err) {
+    logger.error(`resolve-orders 失败：${err.message}`);
+    throw err;
+  }
+});
+
+// 一键清除：清空用户自定义短语（保留备份用于撤回）
+ipcMain.handle('clear-ime', async () => {
+  try {
+    const result = await importer.clear();
+    logger.info(`清除成功：原 ${result.originalCount} 条 → ${result.target}`);
+    return result;
+  } catch (err) {
+    logger.error(`清除失败：${err.message}`);
+    throw err;
+  }
+});
+
+// 撤回上一次导入/清除操作
+ipcMain.handle('undo-ime', async (_e, payload) => {
+  try {
+    const result = await importer.undo(payload);
+    logger.info(`撤回成功 → ${result.target}`);
+    return result;
+  } catch (err) {
+    logger.error(`撤回失败：${err.message}`);
+    throw err;
+  }
+});
+
+// ─── 批次管理：不同日期生成的名称 + used.json 已使用记录 ───
+ipcMain.handle('batches', () => collection.store.listBatches());
+ipcMain.handle('batch-load', async (_e, { batch }) => {
+  const data = await collection.store.loadBatch(batch);
+  logger.info(`加载批次 ${batch}：${data.entries.length} 条名称，${data.used.length} 条已使用`);
+  return data;
+});
+ipcMain.handle('used-save', async (_e, { batch, used }) => {
+  const fp = await collection.store.saveUsed(batch, used || []);
+  logger.info(`已使用记录更新：${batch} 共 ${(used || []).length} 条 → ${fp}`);
+  return fp;
+});
+
 // 配置读写（./data/config.yaml）
 ipcMain.handle('config-load', () => configStore.load());
 ipcMain.handle('config-save', async (_e, cfg) => {
   const merged = await configStore.save(cfg);
   logger.info(`配置已保存：${JSON.stringify(merged)}`);
   return merged;
+});
+
+// 固定到窗口最前面（切换 alwaysOnTop，返回新状态）
+ipcMain.handle('toggle-always-on-top', (e) => {
+  const win = BrowserWindow.fromWebContents(e.sender);
+  if (!win) return { pinned: true };
+  const next = !win.isAlwaysOnTop();
+  win.setAlwaysOnTop(next);
+  logger.info(`置顶状态切换为：${next ? '已固定' : '已取消固定'}`);
+  return { pinned: next };
+});
+
+// 复制文本到系统剪贴板（供名称点击复制使用）
+ipcMain.handle('copy-text', (_e, { text } = {}) => {
+  if (text != null) clipboard.writeText(String(text));
+  return true;
 });
 
 ipcMain.on('close', () => BrowserWindow.getFocusedWindow()?.close());

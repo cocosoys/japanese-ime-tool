@@ -11,42 +11,89 @@
     <div class="titlebar">
       <span class="title">日文名 · 输入法短语</span>
       <div class="win-btns">
-        <button id="btn-min" class="wbtn">—</button>
-        <button id="btn-close" class="wbtn">×</button>
+        <button id="btn-pin" class="wbtn pin-active" data-tip="固定窗口到最前面（始终置顶），再次点击取消固定">📌</button>
+        <button id="btn-min" class="wbtn" data-tip="最小化窗口">—</button>
+        <button id="btn-close" class="wbtn" data-tip="关闭工具">×</button>
       </div>
     </div>
 
+    <!-- 抓取面板 -->
     <section class="panel">
-      <label class="lbl">Cloudflare Cookie（cf_clearance）</label>
-      <textarea id="cookie" rows="2" placeholder="粘贴 cf_clearance 值（仅值，不含名称）&#10;获取方式：浏览器打开 namechef → F12 → Application → Cookies → 复制 cf_clearance 的 Value"></textarea>
-      <div class="hint">⚠ Cookie 有效期约 5~30 分钟，过期需重新复制</div>
       <div class="row">
-        <select id="gender">
+        <select id="gender" data-tip="选择生成名字的性别倾向：女名 / 男名 / 中性">
           <option value="G">女名</option>
           <option value="B">男名</option>
           <option value="U">中性</option>
         </select>
-        <select id="popularity">
+        <select id="popularity" data-tip="选择名字风格：热门 / 独特 / 流行">
           <option value="popular">热门</option>
           <option value="unique">独特</option>
           <option value="trending">流行</option>
         </select>
-        <button id="btn-auto" class="auto">⚡抓取</button>
+        <button id="btn-auto" class="auto" data-tip="从 namechef 抓取一批日文名并保存到本地批次">⚡抓取</button>
       </div>
-      <div id="status" class="status"></div>
+      <!-- 顶部进度提示（短暂显示，最终结果输出到底部栏） -->
+      <div id="status-top" class="status-top"></div>
     </section>
 
+    <!-- 数据统计面板：三张仪表卡 -->
+    <section class="panel stats-panel">
+      <div class="stats-cards">
+        <div class="stat-card" data-field="kanji">
+          <div class="stat-card-header">
+            <span class="stat-card-icon">漢</span>
+            <span class="stat-card-title">汉字</span>
+          </div>
+          <div class="stat-card-body">
+            <span class="stat-card-value"></span>
+            <span class="stat-card-pct"></span>
+          </div>
+          <div class="stat-card-bar"><div class="stat-card-bar-fill"></div></div>
+          <div class="stat-card-footer"></div>
+        </div>
+        <div class="stat-card" data-field="romaji">
+          <div class="stat-card-header">
+            <span class="stat-card-icon">Ro</span>
+            <span class="stat-card-title">罗马音</span>
+          </div>
+          <div class="stat-card-body">
+            <span class="stat-card-value"></span>
+            <span class="stat-card-pct"></span>
+          </div>
+          <div class="stat-card-bar"><div class="stat-card-bar-fill"></div></div>
+          <div class="stat-card-footer"></div>
+        </div>
+        <div class="stat-card" data-field="hiragana">
+          <div class="stat-card-header">
+            <span class="stat-card-icon">あ</span>
+            <span class="stat-card-title">平假名</span>
+          </div>
+          <div class="stat-card-body">
+            <span class="stat-card-value"></span>
+            <span class="stat-card-pct"></span>
+          </div>
+          <div class="stat-card-bar"><div class="stat-card-bar-fill"></div></div>
+          <div class="stat-card-footer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 批次与导入控制 -->
     <section class="panel">
       <div class="row">
+        <label class="lbl small">数据批次</label>
+        <select id="batch" data-tip="选择要操作的数据批次（按抓取时间命名）"></select>
+      </div>
+      <div class="row">
         <label class="lbl small">短语字段</label>
-        <select id="phraseField">
+        <select id="phraseField" data-tip="最终写进输入法候选栏的字段：汉字 / 罗马音 / 平假名 / 简体中文">
           <option value="kanji">汉字</option>
           <option value="romaji">罗马音</option>
           <option value="hiragana">平假名</option>
           <option value="cnSimplified">简体中文</option>
         </select>
         <label class="lbl small">绑定方式</label>
-        <select id="binding">
+        <select id="binding" data-tip="把名字映射到输入法拼音编码的方式：罗马音 / 编号 / 中文近似 / 手动">
           <option value="romaji">罗马音</option>
           <option value="sequential">编号</option>
           <option value="chineseApprox">中文近似</option>
@@ -54,15 +101,32 @@
         </select>
       </div>
       <div class="row">
+        <label class="lbl small">候选位置</label>
+        <select id="orderMode" data-tip="固定：所有短语都用同一候选位置（右侧可在固定时改成 =2、=3…）；自动：导入时检测「同拼音+同位置」冲突并自动 +1">
+          <option value="fixed">固定(=1)</option>
+          <option value="auto">自动(冲突检测)</option>
+        </select>
+        <input id="orderValue" type="number" min="1" value="1" data-tip="固定模式下的候选窗口位置，可改成 2、3……数值越大越靠后" />
+      </div>
+      <div class="row btn-row">
         <label class="lbl small">导入数量</label>
-        <input id="count" type="number" min="1" value="10" />
-        <button id="btn-import" class="primary">一键导入</button>
+        <input id="count" type="number" min="1" value="10" data-tip="本次「一键导入」要写入的名字条数" />
+        <button id="btn-import" class="primary" data-tip="把当前批次前 N 条名字写入微软拼音「用户自定义短语」">一键导入</button>
+        <button id="btn-clear" class="warn" data-tip="清空微软拼音词库里的全部自定义短语（可用「撤回」恢复）">一键清除</button>
+        <button id="btn-undo" class="undo-btn" disabled data-tip="撤回上一次的导入或清除操作">撤回</button>
       </div>
     </section>
 
+    <!-- 名称列表 -->
     <section class="list-wrap">
       <div id="list" class="list"></div>
     </section>
+
+    <!-- 底部状态栏（全局信息输出终端，可选中复制、不可编辑） -->
+    <div class="status-bar-wrap">
+      <div id="status-bar" class="status-bar"></div>
+      <button id="btn-hide-status" class="hide-status-btn" data-tip="隐藏底部提示栏（出现新提示时会自动重新显现）">▾</button>
+    </div>
   </div>
   <script src="app.js"></script>
 </body>

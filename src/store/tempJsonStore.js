@@ -118,4 +118,44 @@ export class TempJsonStore {
   resetDir() {
     this._currentDir = null;
   }
+
+  // ─── 批次管理（不同日期生成的名称） ───
+
+  /**
+   * 列出所有批次目录名（按时间倒序，最新在前）
+   */
+  async listBatches() {
+    try {
+      return (await fs.readdir(this.baseDir))
+        .filter((d) => /^\d{4}-\d{2}-\d{2}_\d{4}$/.test(d))
+        .sort()
+        .reverse();
+    } catch { return []; }
+  }
+
+  /**
+   * 加载指定批次的名称数据与已使用记录
+   * @returns {{entries: object[], used: string[]}}
+   */
+  async loadBatch(batch) {
+    const dir = path.join(this.baseDir, batch);
+    let entries = [];
+    let used = [];
+    try { entries = JSON.parse(await fs.readFile(path.join(dir, 'name.json'), 'utf8')); } catch { /* 无数据 */ }
+    try { used = JSON.parse(await fs.readFile(path.join(dir, 'used.json'), 'utf8')); } catch { /* 尚无 used.json */ }
+    return { entries, used };
+  }
+
+  /**
+   * 保存指定批次的已使用名称列表 → names_data/批次/used.json
+   * @param {string} batch - 批次目录名
+   * @param {string[]} usedList - 已使用名称（kanji）数组
+   */
+  async saveUsed(batch, usedList) {
+    const dir = path.join(this.baseDir, batch);
+    await fs.mkdir(dir, { recursive: true });
+    const fp = path.join(dir, 'used.json');
+    await fs.writeFile(fp, JSON.stringify([...new Set(usedList)], null, 2), 'utf8');
+    return fp;
+  }
 }
