@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>日文名 → 输入法短语</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="card">
+    <div class="titlebar">
+      <span class="title">日文名 · 输入法短语</span>
+      <div class="win-btns">
+        <button id="btn-min" class="wbtn">—</button>
+        <button id="btn-close" class="wbtn">×</button>
+      </div>
+    </div>
+
+    <section class="panel">
+      <label class="lbl">Cloudflare Cookie（cf_clearance）</label>
+      <textarea id="cookie" rows="2" placeholder="粘贴 cf_clearance 值（仅值，不含名称）&#10;获取方式：浏览器打开 namechef → F12 → Application → Cookies → 复制 cf_clearance 的 Value"></textarea>
+      <div class="hint">⚠ Cookie 有效期约 5~30 分钟，过期需重新复制</div>
+      <div class="row">
+        <select id="gender">
+          <option value="G">女名</option>
+          <option value="B">男名</option>
+          <option value="U">中性</option>
+        </select>
+        <select id="popularity">
+          <option value="popular">热门</option>
+          <option value="unique">独特</option>
+          <option value="trending">流行</option>
+        </select>
+        <button id="btn-auto" class="auto">⚡抓取</button>
+      </div>
+      <div id="status" class="status"></div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <label class="lbl small">短语字段</label>
+        <select id="phraseField">
+          <option value="kanji">汉字</option>
+          <option value="romaji">罗马音</option>
+          <option value="hiragana">平假名</option>
+          <option value="cnSimplified">简体中文</option>
+        </select>
+        <label class="lbl small">绑定方式</label>
+        <select id="binding">
+          <option value="romaji">罗马音</option>
+          <option value="sequential">编号</option>
+          <option value="chineseApprox">中文近似</option>
+          <option value="manual">手动</option>
+        </select>
+      </div>
+      <div class="row">
+        <label class="lbl small">导入数量</label>
+        <input id="count" type="number" min="1" value="10" />
+        <button id="btn-import" class="primary">一键导入</button>
+      </div>
+    </section>
+
+    <section class="list-wrap">
+      <div id="list" class="list"></div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
