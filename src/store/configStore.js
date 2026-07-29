@@ -10,9 +10,13 @@ import path from 'path';
 const DEFAULTS = {
   gender: 'G',            // 获取名称：G=女名 B=男名 U=中性
   popularity: 'popular',  // 热门类型：popular/unique/trending
-  phraseField: 'kanji',   // 短语字段：kanji/romaji/hiragana/cnSimplified
-  binding: 'romaji',      // 绑定方式：romaji/sequential/chineseApprox/manual
+  phraseField: 'kanji',   // 短语字段：kanji/romaji/hiragana
+  binding: 'manual',      // 绑定方式：manual/qwerty/qwerFlow
   count: 10,              // 导入数量
+  lang: 'zh-CN',          // 界面语言：zh-CN/zh-TW/en/ja/ko（语言包位于 ./data/lang/*.json）
+  theme: 'system',        // 主题：light/dark/system（跟随系统）
+  pinned: false,           // 固定窗口到最前面（置顶）：true 置顶 / false 取消（默认不置顶，由 config.yaml 决定）
+  lastBatch: '',            // 上次打开的数据批次名（启动据此自动恢复；丢失/异常时清空加载）
 };
 
 function toYaml(obj) {

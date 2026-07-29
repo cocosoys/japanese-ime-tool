@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 // 集成测试：ImportService → MsPinyinImporter 全链路（使用临时 APPDATA，不触碰真实 IME）。
 // reloadIme 被 mock，避免真正杀死 ChsIME 进程。
 import { ImportService } from '../src/services/ImportService.js';
@@ -21,7 +24,7 @@ const rawEntries = [
   { kanji: '雪', romaji: 'yuki', hiragana: 'ゆき', raw: '雪' },
 ];
 const entries = rawEntries.map((e) => NameEntry.fromJSON(e));
-const config = new ImportConfig({ count: 3, phraseField: 'kanji', bindingStrategy: 'romaji', orderValue: 2, orderMode: 'fixed', lockedBindings: {} });
+const config = new ImportConfig({ count: 3, phraseField: 'kanji', bindingStrategy: 'qwerty', orderValue: 2, orderMode: 'fixed', lockedBindings: {} });
 
 const res = await service.import(entries, config, {});
 const chs = path.join(tmpDir, 'Microsoft', 'InputMethod', 'Chs');
@@ -72,8 +75,8 @@ parsed.ph.forEach((x, i) => console.log(`  词条${i}: ${x.code} → ${x.phrase}
 
 // 验证记录内容正确（romaji → kanji，均为位置1）
 console.assert(parsed.count === 3, '应有 3 条');
-console.assert(parsed.ph[0].code === 'sakura' && parsed.ph[0].phrase === '桜', '词条0 应为 sakura→桜');
-console.assert(parsed.ph[2].code === 'yuki' && parsed.ph[2].phrase === '雪', '词条2 应为 yuki→雪');
+console.assert(parsed.ph[0].code === 'q' && parsed.ph[0].phrase === '桜', '词条0 应为 q→桜');
+console.assert(parsed.ph[2].code === 'e' && parsed.ph[2].phrase === '雪', '词条2 应为 e→雪');
 
 // === clear ===
 const clr = await service.clear();
@@ -126,3 +129,6 @@ await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
 await fs.rm(tmpDir2, { recursive: true, force: true }).catch(() => {});
 
 console.log('\n✅ 集成测试全部通过');
+
+
+===== 测试/调试脚本结束 ===== */

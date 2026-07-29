@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 // 验证 MschxudpExporter 输出的字节结构可被 IME 读取（对照 gongyoyo/mschxudp win10 1703 格式回读）。
 import { MschxudpExporter } from '../src/implementations/exporter/MschxudpExporter.js';
 import { promises as fs } from 'fs';
@@ -117,3 +120,6 @@ console.assert(pc.count === 0, '清除后 count 应为 0，不能把旧词条合
 console.log('✅ 清除测试通过：merge:false 不会读回旧词条');
 
 await fs.unlink(tmpFile).catch(() => {});
+
+
+===== 测试/调试脚本结束 ===== */

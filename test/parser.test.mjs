@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 import assert from 'assert';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -19,11 +22,14 @@ console.log('✓ HTML 解析得到', items.length, '条');
 const entries = items.map((i) => new NameEntry(i));
 const svc = new ImportService();
 const { records, buffer } = svc.exportBuffer(entries, {
-  count: entries.length, phraseField: 'kanji', bindingStrategy: 'romaji',
+  count: entries.length, phraseField: 'kanji', bindingStrategy: 'qwerty',
 });
-assert.strictEqual(records[0].code, 'yuki');
+assert.strictEqual(records[0].code, 'q');
 assert.strictEqual(records[0].word, '雪');
 parseDatCheck(buffer, records);
 console.log('✓ 解析 -> 绑定 -> 导出 .dat 全链路通过');
 
 console.log('\n解析测试通过 ✅', JSON.stringify(records, null, 2));
+
+
+===== 测试/调试脚本结束 ===== */

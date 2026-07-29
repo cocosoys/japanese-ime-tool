@@ -9,7 +9,7 @@ import { NameEntry } from '../entities/NameEntry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const htmlPath = process.argv[2] || path.join(__dirname, '..', '..', 'test', 'fixtures', 'sample.html');
-const strategy = process.argv[3] || 'romaji';
+const strategy = process.argv[3] || 'manual';
 
 const html = readFileSync(htmlPath, 'utf8');
 const entries = new NamechefHtmlParser().parse(html).map((i) => new NameEntry(i));

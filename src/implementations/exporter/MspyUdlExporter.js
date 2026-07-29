@@ -49,10 +49,15 @@ export class MspyUdlExporter extends PhraseExporter {
     const existingWords = new Set(existingEntries.map((e) => e.word));
     const newEntries = [];
     for (const r of records) {
-      const word = r.word || '';
+      let word = r.word || '';
+      let code = (r.code || '').toLowerCase();
       if (!word) continue;               // 空词跳过
+      if (!code) continue;               // 空码跳过（Settings UI 无法编辑无触发码的词条）
+      // NFC 规范化（与 mschxudp 保持一致，避免编码差异）
+      word = word.normalize('NFC');
+      code = code.normalize('NFC');
       if (existingWords.has(word)) continue; // 去重：已存在则不重复添加
-      newEntries.push(this._makeEntry(r, reserved));
+      newEntries.push(this._makeEntry(r, reserved, code, word));
       existingWords.add(word);
     }
 
@@ -94,10 +99,10 @@ export class MspyUdlExporter extends PhraseExporter {
     return entries;
   }
 
-  /** 将 {code, word} 记录转为 UDL 60 字节条目 */
-  _makeEntry(record, reserved) {
-    const word = record.word || '';
-    const code = (record.code || '').toLowerCase();
+  /** 将 {code, word} 记录转为 UDL 60 字节条目（code/word 已做 NFC 规范化） */
+  _makeEntry(record, reserved, normalizedCode, normalizedWord) {
+    const word = normalizedWord || (record.word || '').normalize('NFC');
+    const code = normalizedCode || (record.code || '').toLowerCase().normalize('NFC');
     const wordBuf = Buffer.from(word, 'utf16le');
     const wordLen = wordBuf.length / 2;               // UTF-16LE 每字符 2 字节
     const epoch = Math.floor(Date.now() / 1000) >>> 0; // 当前时间戳（uint32）

@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 import { MschxudpExporter } from '../src/implementations/exporter/MschxudpExporter.js';
 import assert from 'assert';
 
@@ -95,3 +98,6 @@ console.log('=== resolveOrderConflicts 冲突检测测试 ===\n');
 }
 
 console.log('✅ resolveOrderConflicts 全部测试通过（5/5 场景）');
+
+
+===== 测试/调试脚本结束 ===== */

@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 // 向真实的 ChsPinyinEUDPv1.lex 添加一条测试短语（合并模式，保留现有词条），用于真机验证一键导入链路。
 // 用法: node tools/add_test_phrase.mjs [--no-reload]
 import { MschxudpExporter } from '../src/implementations/exporter/MschxudpExporter.js';
@@ -44,3 +47,6 @@ if (!noReload) {
 } else {
   console.log('\n已跳过重载，请手动切换一次输入法后测试');
 }
+
+
+===== 测试/调试脚本结束 ===== */

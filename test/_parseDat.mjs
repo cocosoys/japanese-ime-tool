@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 // 与 dat-roundtrip 共用的解析校验，抽出来给 parser 测试用
 import { MsPinyinDatExporter } from '../src/implementations/exporter/MsPinyinDatExporter.js';
 
@@ -29,3 +32,6 @@ export function parseDatCheck(buf, expected) {
   }
   return results;
 }
+
+
+===== 测试/调试脚本结束 ===== */

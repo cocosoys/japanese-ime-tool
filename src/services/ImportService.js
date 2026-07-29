@@ -26,7 +26,9 @@ export class ImportService {
   buildRecords(entries, config, aliases = {}) {
     const cfg = config instanceof ImportConfig ? config : new ImportConfig(config);
     const strategy = createBindingStrategy(cfg.bindingStrategy, { locked: cfg.lockedBindings });
-    const slice = entries.slice(0, cfg.count);
+    // 按绑定方式的限位器钳制导入数量（手动 9999 / manualGlobal 9999 / qwerty 24 / qwerFlow 12）
+    const maxCount = (typeof strategy.limit === 'number') ? strategy.limit : Infinity;
+    const slice = entries.slice(0, Math.min(cfg.count, maxCount));
     const records = [];
     // 固定模式：所有短语统一使用 orderValue 这一个候选位置；
     // 自动模式：以 1 为起点交给 resolveOrderConflicts 做冲突检测与递增。

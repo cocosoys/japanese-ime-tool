@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 import assert from 'assert';
 import { MsPinyinDatExporter } from '../src/implementations/exporter/MsPinyinDatExporter.js';
 
@@ -58,3 +61,6 @@ run('多词条-长名', Array.from({ length: 20 }, (_, i) => ({
 })));
 
 console.log('\n全部 .dat 往返校验通过 ✅');
+
+
+===== 测试/调试脚本结束 ===== */

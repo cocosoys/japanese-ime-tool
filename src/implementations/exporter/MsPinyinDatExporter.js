@@ -31,8 +31,8 @@ export class MsPinyinDatExporter extends PhraseExporter {
     let cumulative = 0;
 
     for (let i = 0; i < count; i++) {
-      const code = Buffer.from(records[i].code || '', 'utf16le');
-      const word = Buffer.from(records[i].word || '', 'utf16le');
+      const code = Buffer.from((records[i].code || '').normalize('NFC'), 'utf16le');
+      const word = Buffer.from((records[i].word || '').normalize('NFC'), 'utf16le');
       const order = (records[i].order ?? (i + 1)) & 0xff;
 
       const entry = Buffer.concat([

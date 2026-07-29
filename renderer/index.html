@@ -9,40 +9,69 @@
 <body>
   <div class="card">
     <div class="titlebar">
-      <span class="title">日文名 · 输入法短语</span>
+      <span class="title" data-i18n="app.title">日文名 · 输入法短语</span>
       <div class="win-btns">
-        <button id="btn-pin" class="wbtn pin-active" data-tip="固定窗口到最前面（始终置顶），再次点击取消固定">📌</button>
-        <button id="btn-min" class="wbtn" data-tip="最小化窗口">—</button>
-        <button id="btn-close" class="wbtn" data-tip="关闭工具">×</button>
+        <button id="btn-refresh" class="wbtn" data-i18n-tip="tip.refresh" data-tip="刷新当前界面所有内容">⟳</button>
+        <button id="btn-settings" class="wbtn" data-i18n-tip="tip.settings" data-tip="设置：语言与主题切换">⚙</button>
+        <button id="btn-pin" class="wbtn" data-i18n-tip="tip.pin" data-tip="固定窗口到最前面（始终置顶），再次点击取消固定">📌</button>
+        <button id="btn-min" class="wbtn" data-i18n-tip="tip.min" data-tip="最小化窗口">—</button>
+        <button id="btn-close" class="wbtn" data-i18n-tip="tip.close" data-tip="关闭工具">×</button>
+      </div>
+    </div>
+
+    <!-- 设置面板（点击 ⚙ 弹出） -->
+    <div id="settings-panel" class="settings-panel">
+      <div class="set-row">
+        <label data-i18n="set.lang">语言</label>
+        <select id="set-lang">
+          <option value="zh-CN">简体中文</option>
+          <option value="zh-TW">繁體中文</option>
+          <option value="en">English</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+        </select>
+      </div>
+      <div class="set-row">
+        <label data-i18n="set.theme">主题</label>
+        <select id="set-theme">
+          <option value="light" data-i18n="theme.light">亮色</option>
+          <option value="dark" data-i18n="theme.dark">暗色</option>
+          <option value="system" data-i18n="theme.system">跟随系统</option>
+        </select>
+      </div>
+      <div class="set-row set-actions">
+        <button id="set-global-save" data-i18n="set.globalSave" data-i18n-tip="tip.globalSave" data-tip="把当前批次的手动绑定保存为全局默认">存当前批次绑定为全局</button>
+        <button id="set-global-clear" data-i18n="set.globalClear" data-i18n-tip="tip.globalClear" data-tip="删除全局默认绑定">清除全局默认绑定</button>
+      </div>
+      <div class="set-row set-actions">
+        <button id="set-batch-clear" data-i18n="set.batchClear" data-i18n-tip="tip.batchClear" data-tip="清空当前批次的全部手动绑定（不影响其他批次）">删除当前批次绑定</button>
       </div>
     </div>
 
     <!-- 抓取面板 -->
     <section class="panel">
       <div class="row">
-        <select id="gender" data-tip="选择生成名字的性别倾向：女名 / 男名 / 中性">
-          <option value="G">女名</option>
-          <option value="B">男名</option>
-          <option value="U">中性</option>
+        <select id="gender" data-i18n-tip="tip.gender" data-tip="选择生成名字的性别倾向：女名 / 男名 / 中性">
+          <option value="G" data-i18n="gender.G">女名</option>
+          <option value="B" data-i18n="gender.B">男名</option>
+          <option value="U" data-i18n="gender.U">中性</option>
         </select>
-        <select id="popularity" data-tip="选择名字风格：热门 / 独特 / 流行">
-          <option value="popular">热门</option>
-          <option value="unique">独特</option>
-          <option value="trending">流行</option>
+        <select id="popularity" data-i18n-tip="tip.popularity" data-tip="选择名字风格：热门 / 独特 / 流行">
+          <option value="popular" data-i18n="pop.popular">热门</option>
+          <option value="unique" data-i18n="pop.unique">独特</option>
+          <option value="trending" data-i18n="pop.trending">流行</option>
         </select>
-        <button id="btn-auto" class="auto" data-tip="从 namechef 抓取一批日文名并保存到本地批次">⚡抓取</button>
+        <button id="btn-auto" class="auto" data-i18n="btn.fetch" data-i18n-tip="tip.fetch" data-tip="从 namechef 抓取一批日文名并保存到本地批次">⚡抓取</button>
       </div>
-      <!-- 顶部进度提示（短暂显示，最终结果输出到底部栏） -->
-      <div id="status-top" class="status-top"></div>
     </section>
 
     <!-- 数据统计面板：三张仪表卡 -->
     <section class="panel stats-panel">
       <div class="stats-cards">
-        <div class="stat-card" data-field="kanji">
+        <div class="stat-card" data-field="kanji" data-tip="点击切换为当前短语字段（汉字）">
           <div class="stat-card-header">
             <span class="stat-card-icon">漢</span>
-            <span class="stat-card-title">汉字</span>
+            <span class="stat-card-title" data-i18n="stat.kanji">汉字</span>
           </div>
           <div class="stat-card-body">
             <span class="stat-card-value"></span>
@@ -51,10 +80,10 @@
           <div class="stat-card-bar"><div class="stat-card-bar-fill"></div></div>
           <div class="stat-card-footer"></div>
         </div>
-        <div class="stat-card" data-field="romaji">
+        <div class="stat-card" data-field="romaji" data-tip="点击切换为当前短语字段（罗马音）">
           <div class="stat-card-header">
             <span class="stat-card-icon">Ro</span>
-            <span class="stat-card-title">罗马音</span>
+            <span class="stat-card-title" data-i18n="stat.romaji">罗马音</span>
           </div>
           <div class="stat-card-body">
             <span class="stat-card-value"></span>
@@ -63,10 +92,10 @@
           <div class="stat-card-bar"><div class="stat-card-bar-fill"></div></div>
           <div class="stat-card-footer"></div>
         </div>
-        <div class="stat-card" data-field="hiragana">
+        <div class="stat-card" data-field="hiragana" data-tip="点击切换为当前短语字段（平假名）">
           <div class="stat-card-header">
             <span class="stat-card-icon">あ</span>
-            <span class="stat-card-title">平假名</span>
+            <span class="stat-card-title" data-i18n="stat.hiragana">平假名</span>
           </div>
           <div class="stat-card-body">
             <span class="stat-card-value"></span>
@@ -81,39 +110,48 @@
     <!-- 批次与导入控制 -->
     <section class="panel">
       <div class="row">
-        <label class="lbl small">数据批次</label>
-        <select id="batch" data-tip="选择要操作的数据批次（按抓取时间命名）"></select>
+        <label class="lbl small" data-i18n="lbl.batch">数据批次</label>
+        <div class="batch-select">
+          <button id="batch-btn" class="batch-btn" type="button" data-i18n-tip="tip.batch" data-tip="选择要操作的数据批次（按抓取时间命名）">
+            <span id="batch-label">—</span>
+            <span class="caret">▾</span>
+          </button>
+          <div id="batch-list" class="batch-list hidden"></div>
+        </div>
       </div>
       <div class="row">
-        <label class="lbl small">短语字段</label>
-        <select id="phraseField" data-tip="最终写进输入法候选栏的字段：汉字 / 罗马音 / 平假名 / 简体中文">
-          <option value="kanji">汉字</option>
-          <option value="romaji">罗马音</option>
-          <option value="hiragana">平假名</option>
-          <option value="cnSimplified">简体中文</option>
+        <label class="lbl small" data-i18n="lbl.phraseField">短语字段</label>
+        <select id="phraseField" data-i18n-tip="tip.phraseField" data-tip="最终写进输入法候选栏的字段：汉字 / 罗马音 / 平假名">
+          <option value="kanji" data-i18n="field.kanji">汉字</option>
+          <option value="romaji" data-i18n="field.romaji">罗马音</option>
+          <option value="hiragana" data-i18n="field.hiragana">平假名</option>
         </select>
-        <label class="lbl small">绑定方式</label>
-        <select id="binding" data-tip="把名字映射到输入法拼音编码的方式：罗马音 / 编号 / 中文近似 / 手动">
-          <option value="romaji">罗马音</option>
-          <option value="sequential">编号</option>
-          <option value="chineseApprox">中文近似</option>
-          <option value="manual">手动</option>
-        </select>
+        <label class="lbl small" data-i18n="lbl.binding">绑定方式</label>
+        <div class="binding-select">
+          <button id="binding-btn" class="binding-btn" type="button" data-i18n-tip="tip.binding" data-tip="把名字映射到输入法编码的方式：手动 / 手动(全局) / 英文键位顺序(24) / 英文键位流转顺序(12)">
+            <span id="binding-label">手动</span>
+            <span class="caret">▾</span>
+          </button>
+          <div id="binding-list" class="binding-list hidden"></div>
+          <input id="binding" type="hidden" value="manual" />
+        </div>
       </div>
       <div class="row">
-        <label class="lbl small">候选位置</label>
-        <select id="orderMode" data-tip="固定：所有短语都用同一候选位置（右侧可在固定时改成 =2、=3…）；自动：导入时检测「同拼音+同位置」冲突并自动 +1">
-          <option value="fixed">固定(=1)</option>
-          <option value="auto">自动(冲突检测)</option>
+        <label class="lbl small" data-i18n="lbl.orderPos">候选位置</label>
+        <select id="orderMode" data-i18n-tip="tip.orderMode" data-tip="固定：所有短语都用同一候选位置；自动：导入时检测冲突并自动 +1">
+          <option value="fixed" data-i18n="order.fixed">固定(=1)</option>
+          <option value="auto" data-i18n="order.auto">自动(冲突检测)</option>
         </select>
-        <input id="orderValue" type="number" min="1" value="1" data-tip="固定模式下的候选窗口位置，可改成 2、3……数值越大越靠后" />
+        <input id="orderValue" class="order-value" type="number" min="1" value="1" data-i18n-tip="tip.orderValue" data-tip="固定模式下的候选窗口位置，可改成 2、3……数值越大越靠后" />
       </div>
       <div class="row btn-row">
-        <label class="lbl small">导入数量</label>
-        <input id="count" type="number" min="1" value="10" data-tip="本次「一键导入」要写入的名字条数" />
-        <button id="btn-import" class="primary" data-tip="把当前批次前 N 条名字写入微软拼音「用户自定义短语」">一键导入</button>
-        <button id="btn-clear" class="warn" data-tip="清空微软拼音词库里的全部自定义短语（可用「撤回」恢复）">一键清除</button>
-        <button id="btn-undo" class="undo-btn" disabled data-tip="撤回上一次的导入或清除操作">撤回</button>
+        <label class="lbl small" data-i18n="lbl.count">导入数量</label>
+        <div class="count-wrap">
+          <input id="count" type="number" min="1" value="10" data-i18n-tip="tip.count" data-tip="本次「一键导入」要写入的名字条数（受绑定方式限位）；左键±1调整，右击切换最大/最小" />
+        </div>
+        <button id="btn-import" class="primary" data-i18n="btn.import" data-i18n-tip="tip.import" data-tip="把当前批次前 N 条名字写入微软拼音「用户自定义短语」">一键导入</button>
+        <button id="btn-clear" class="warn" data-i18n="btn.clear" data-i18n-tip="tip.clear" data-tip="清空微软拼音词库里的全部自定义短语（可用「撤回」恢复）">一键清除</button>
+        <button id="btn-undo" class="undo-btn" disabled data-i18n="btn.undo" data-i18n-tip="tip.undo" data-tip="撤回上一次的导入或清除操作">撤回</button>
       </div>
     </section>
 
@@ -122,10 +160,19 @@
       <div id="list" class="list"></div>
     </section>
 
-    <!-- 底部状态栏（全局信息输出终端，可选中复制、不可编辑） -->
+    <!-- 底部状态栏（全局唯一信息输出终端，可选中复制、不可编辑） -->
     <div class="status-bar-wrap">
       <div id="status-bar" class="status-bar"></div>
-      <button id="btn-hide-status" class="hide-status-btn" data-tip="隐藏底部提示栏（出现新提示时会自动重新显现）">▾</button>
+      <button id="btn-hide-status" class="hide-status-btn" data-i18n-tip="tip.hideStatus" data-tip="隐藏底部提示栏（出现新提示时会自动重新显现）">▾</button>
+    </div>
+
+    <!-- 自定义确认弹窗（用于需要 >2 个选项的场景，如手动绑定不足警告） -->
+    <div id="dialog-overlay" class="dialog-overlay hidden">
+      <div id="dialog-box" class="dialog-box">
+        <div id="dialog-title" class="dialog-title"></div>
+        <div id="dialog-body" class="dialog-body"></div>
+        <div id="dialog-actions" class="dialog-actions"></div>
+      </div>
     </div>
   </div>
   <script src="app.js"></script>

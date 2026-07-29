@@ -4,5 +4,6 @@ import { BindingStrategy } from '../../interfaces/BindingStrategy.js';
 export class ManualBinding extends BindingStrategy {
   constructor(locked = {}) { super(); this.locked = locked; }
   get name() { return 'manual'; }
+  get limit() { return 9999; }
   generate(entry, index) { return this.locked[index] ?? ''; }
 }

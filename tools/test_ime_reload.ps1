@@ -1,3 +1,6 @@
+<# TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 # Win11 微软拼音自定义短语 — 诊断与重载测试
 $ErrorActionPreference = "SilentlyContinue"
 
@@ -98,3 +101,6 @@ Get-Process | Where-Object { $_.ProcessName -match 'ChsIME|TextInputHost|Microso
 
 Write-Host "`n=== 测试完成 ===" -ForegroundColor Green
 Write-Host "请手动验证：在输入框输入 q + 空格，看是否有候选词出现" -ForegroundColor White
+
+
+===== 测试/调试脚本结束 ===== #>

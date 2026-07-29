@@ -1,26 +1,47 @@
-import { app, BrowserWindow, ipcMain, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, clipboard, nativeTheme } from 'electron';
 import path from 'path';
+import { promises as fsp, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { NameCollectionService } from './src/services/NameCollectionService.js';
 import { ImportService } from './src/services/ImportService.js';
 import { NameEntry } from './src/entities/NameEntry.js';
 import { ImportConfig } from './src/entities/ImportConfig.js';
 import { ConfigStore } from './src/store/configStore.js';
+import { BindingsStore } from './src/store/bindingsStore.js';
 import { Logger } from './src/store/logger.js';
+import { BINDING_LIMITS } from './src/implementations/binding/BindingStrategyFactory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const collection = new NameCollectionService();
 const importer = new ImportService();
 const configStore = new ConfigStore();
+const bindingsStore = new BindingsStore();
 const logger = new Logger();
 
-function createWindow() {
+/** 同步读取 config.yaml 中的 pinned 属性（窗口创建前需要知道置顶状态） */
+function readPinnedSync() {
+  try {
+    const cfgPath = path.join(process.cwd(), 'data', 'config.yaml');
+    const text = readFileSync(cfgPath, 'utf8');
+    for (const line of text.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith('#')) continue;
+      const idx = t.indexOf(':');
+      if (idx < 0) continue;
+      const key = t.slice(0, idx).trim();
+      if (key === 'pinned') return t.slice(idx + 1).trim() === 'true';
+    }
+  } catch { /* 文件不存在或读取失败，回退默认 false（不强制置顶） */ }
+  return false; // 默认不置顶（由 config.yaml 的 pinned 属性决定）
+}
+
+function createWindow(initialPinned = false) {
   const win = new BrowserWindow({
     width: 380,
     height: 640,
     minWidth: 320,
     minHeight: 420,
-    alwaysOnTop: true,        // 悬浮置顶
+    alwaysOnTop: initialPinned,   // 由 config.yaml 的 pinned 属性决定初始状态
     frame: false,             // 无边框
     transparent: true,        // 透明背景（配合 CSS 圆角卡片）
     resizable: true,
@@ -34,9 +55,9 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => createWindow(readPinnedSync()));
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) createWindow(readPinnedSync());
 });
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
@@ -217,6 +238,27 @@ ipcMain.handle('used-save', async (_e, { batch, used }) => {
   return fp;
 });
 
+// 各批次使用情况（按当前短语字段统计已用/总数），供批次选择栏进度条渲染
+ipcMain.handle('batches-usage', async (_e, { field } = {}) => {
+  const batches = await collection.store.listBatches();
+  const out = [];
+  for (const b of batches) {
+    try {
+      const data = await collection.store.loadBatch(b);
+      const usedSet = new Set(data.used || []);
+      let used = 0;
+      for (const e of data.entries || []) {
+        const val = (e && (e[field] || e.kanji || e.raw)) || '';
+        if (val && usedSet.has(val)) used++;
+      }
+      out.push({ batch: b, used, total: (data.entries || []).length });
+    } catch {
+      out.push({ batch: b, used: 0, total: 0 });
+    }
+  }
+  return out;
+});
+
 // 配置读写（./data/config.yaml）
 ipcMain.handle('config-load', () => configStore.load());
 ipcMain.handle('config-save', async (_e, cfg) => {
@@ -225,13 +267,48 @@ ipcMain.handle('config-save', async (_e, cfg) => {
   return merged;
 });
 
+// 各绑定方式的「导入数量限位器」最大值（手动 9999 / 手动(全局) 9999 / 英文键位顺序 24 / 流转顺序 12）
+ipcMain.handle('binding-limits', () => BINDING_LIMITS);
+
+// 手动绑定读写（./data/bindings.json，按 批次+行号 持久化，跨批次/重启保留）
+ipcMain.handle('bindings-load', () => bindingsStore.load());
+ipcMain.handle('bindings-save', async (_e, { batch, rows } = {}) => {
+  if (!batch) return bindingsStore.load();
+  const all = await bindingsStore.saveBatch(batch, rows || {});
+  logger.info(`手动绑定已保存：${batch} 共 ${Object.keys(rows || {}).length} 行`);
+  return all;
+});
+// 全局默认绑定（bindings.json 的 __global__ 键，批次未手动填写时回退套用）
+ipcMain.handle('bindings-save-global', async (_e, { rows } = {}) => {
+  const all = await bindingsStore.saveGlobal(rows || {});
+  logger.info(`全局默认绑定已保存：共 ${Object.keys(rows || {}).length} 行`);
+  return all;
+});
+
+// ─── i18n 语言包（./data/lang/<code>.json；缺失时回退 zh-CN） ───
+const LANG_DIR = path.join(process.cwd(), 'data', 'lang');
+ipcMain.handle('lang-load', async (_e, { lang } = {}) => {
+  const code = String(lang || 'zh-CN').replace(/[^a-zA-Z-]/g, '') || 'zh-CN';
+  const tryRead = async (c) => JSON.parse(await fsp.readFile(path.join(LANG_DIR, `${c}.json`), 'utf8'));
+  try {
+    return await tryRead(code);
+  } catch {
+    logger.warn(`语言包 ${code}.json 读取失败，回退 zh-CN`);
+    try { return await tryRead('zh-CN'); } catch { return {}; }
+  }
+});
+
+// 系统主题查询（供「跟随系统」模式使用）
+ipcMain.handle('system-theme', () => ({ dark: nativeTheme.shouldUseDarkColors }));
+
 // 固定到窗口最前面（切换 alwaysOnTop，返回新状态）
-ipcMain.handle('toggle-always-on-top', (e) => {
+// opts.pinned 为布尔时直接设定该状态；省略则切换当前状态
+ipcMain.handle('toggle-always-on-top', (e, opts = {}) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (!win) return { pinned: true };
-  const next = !win.isAlwaysOnTop();
+  const next = (typeof opts.pinned === 'boolean') ? opts.pinned : !win.isAlwaysOnTop();
   win.setAlwaysOnTop(next);
-  logger.info(`置顶状态切换为：${next ? '已固定' : '已取消固定'}`);
+  logger.info(`置顶状态：${next ? '已固定' : '已取消固定'}`);
   return { pinned: next };
 });
 

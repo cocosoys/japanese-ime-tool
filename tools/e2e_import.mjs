@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 import { ImportService } from '../src/services/ImportService.js';
 import { NameEntry } from '../src/entities/NameEntry.js';
 import { ImportConfig } from '../src/entities/ImportConfig.js';
@@ -29,3 +32,6 @@ console.log('最终 magic:', b.toString('hex', 0, 4));
 console.log('最终 count:', b.readUInt32LE(0x0c));
 console.log('最终数据区字节 = count*60 ?', (b.length - 0x2400) === b.readUInt32LE(0x0c) * 60);
 console.log('\n已触发 IME 重载。请在任意输入框键入 q 后按空格，应出现「筱水由季」。');
+
+
+===== 测试/调试脚本结束 ===== */

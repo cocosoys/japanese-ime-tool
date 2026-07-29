@@ -21,11 +21,13 @@ import { PhraseExporter } from '../../interfaces/PhraseExporter.js';
 //     2 字节 offset = 0x10 + len(pinyin_utf16)   (pinyin_utf16 含结尾 \0)
 //     1 字节 candidate   （候选位置，1 起）
 //     1 字节 candidate2  （实测 Settings UI 固定为 0x06）
-//     8 字节 phrase_unknown（实测 Settings UI 写为 0，此处保持 0）
+//     8 字节 phrase_unknown（实测 Settings UI 写为全零，必须严格 8 零字节）
 //     pinyin: utf-16le + \0
 //     phrase: utf-16le + \0
 //
 // 导出时读取现有文件并合并（按 code+word 去重），避免覆盖用户已在 Settings 中手动添加的短语。
+//
+// ⚠️ 编辑失败根因修复：短语必须做 NFC 规范化，且 phrase_unknown 必须严格为 8 零字节。
 
 function u32(n) {
   const b = Buffer.alloc(4);
@@ -159,9 +161,14 @@ export class MschxudpExporter extends PhraseExporter {
     const seen = new Set(existing.map((e) => `${e.code}\u0000${e.word}`));
     const merged = [...existing];
     for (const r of records) {
-      const word = r.word || '';
-      const code = r.code || '';
+      let word = r.word || '';
+      let code = r.code || '';
       if (!word) continue;
+      // NFC 规范化：确保 Unicode 组合字符与预组字符一致（避免 Settings UI 因编码差异拒绝编辑）
+      word = word.normalize('NFC');
+      code = code.normalize('NFC');
+      // 跳过空码词条（Settings UI 无法编辑无拼音/触发码的词条，会导致"编辑: 失败"）
+      if (!code) continue;
       const key = `${code}\u0000${word}`;
       if (seen.has(key)) continue;          // 已存在则不重复添加
       merged.push({
@@ -169,12 +176,30 @@ export class MschxudpExporter extends PhraseExporter {
         word,
         candidate: (r.order ?? (merged.length + 1)) & 0xff,
         candidate2: 0x06,
-        phraseUnknown: 0,
+        phraseUnknown: 0,   // 严格为数值 0，_build 中写入 8 零字节
       });
       seen.add(key);
     }
 
     return this._build(merged);
+  }
+
+  /** 写入后验证：回读文件确认每条词条的 code/word/candidate 均可正确解析（用于诊断编辑失败问题） */
+  async _verify(buffer) {
+    try {
+      const entries = this._parse(buffer);
+      if (entries.length === 0) return { ok: true };
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        // 每条词条必须有非空 code 和 word，且 candidate ≥ 1
+        if (!e.code || !e.word || e.candidate < 1) {
+          return { ok: false, error: `词条 ${i} 异常: code="${e.code}" word="${e.word}" candidate=${e.candidate}` };
+        }
+      }
+      return { ok: true, count: entries.length };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   }
 
   /** 根据词条数组构建完整 mschxudp 文件 Buffer */
@@ -196,11 +221,14 @@ export class MschxudpExporter extends PhraseExporter {
       const wordUtf16 = Buffer.from(word + '\0', 'utf16le');
       const offset = 0x10 + codeUtf16.length;
 
+      // phraseUnknown 必须严格为 8 零字节（Settings UI 写入值，非零可能导致编辑失败）
+      const phraseUnknownBuf = Buffer.alloc(8, 0);
+
       const entry = Buffer.concat([
         Buffer.from([0x10, 0x00, 0x10, 0x00]), // magic 0x00100010
         u16(offset),
         Buffer.from([order, candidate2]),
-        u64(records[i].phraseUnknown ?? 0),    // 8 字节 phrase_unknown
+        phraseUnknownBuf,                        // 8 零字节
         codeUtf16,
         wordUtf16,
       ]);

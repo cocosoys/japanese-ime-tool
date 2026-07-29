@@ -1,3 +1,6 @@
+/* TEST_DEBUG_DISABLED
+===== 测试/调试脚本 · 已整体注释禁用（如需恢复请删除首尾注释包裹）=====
+
 import { readFileSync, writeFileSync, copyFileSync, existsSync, mkdirSync } from 'fs';
 import { MspyUdlExporter } from '../src/implementations/exporter/MspyUdlExporter.js';
 
@@ -78,3 +81,6 @@ writeFileSync(realPath, buf);
 console.log('已备份真实文件 →', bak);
 console.log('已写入真实文件 →', realPath);
 console.log('请打开任意输入框，键入 q 然后空格，应出现「筱水由季」；键入 w 然后空格，应出现「佐藤樱花」。');
+
+
+===== 测试/调试脚本结束 ===== */
