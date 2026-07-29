@@ -1,0 +1,101 @@
+[简体中文](README.md) · [English](README.en.md) · [日本語](README.ja.md) · **[한국어](README.ko.md)** · [繁體中文](README.zh-TW.md)
+
+# 일본어 이름 → IME 구문 (japanese-ime-tool)
+
+Windows용 Electron 플로팅 창 도구입니다. 일본어 이름(한자 / 로마자 / 히라가나)을 긁어와 **Microsoft IME(병음)의 "사용자 정의 구문"**에 한 번에 가져오므로, 중국어 IME를 쓰는 중에도 일본어 이름을 빠르게 입력할 수 있습니다.
+
+> 지원 OS: Windows (Microsoft IME의 사용자 정의 구문 파일 `ChsPinyinEUDPv1.lex`에 의존)
+
+## ✨ 기능
+
+- **일본어 이름 수집**: namechef에서 일괄 수집. 성별(여성 / 남성 / 중성)과 스타일(인기 / 독특 / 트렌드)로 필터링하여 배치별로 저장. 상단 카드를 클릭해 필드를 빠르게 전환.
+- **세 가지 구문 필드**: 한자(kanji), 로마자(romaji), 히라가나(hiragana) — 언제든 전환.
+- **네 가지 바인딩 방식**:
+  - **수동**: IME 코드(병음 문자열)를 행마다 입력. 실수 방지를 위해 잠금 가능.
+  - **수동(전역)**: 코드를 전역 기본 바인딩에 기록, 배치 간 재사용. 편집·잠금 모두 가능.
+  - **QWERTY 키 순서**: `q w e r t y u i o p a s d f g h j k l z x c v b`로 자동 배정, 최대 24건.
+  - **QWERTY 흐름 순서(qwerFlow)**: 회전 열 `q w e r a s d f z x c v`로 배정, 최대 12건.
+- **원클릭 가져오기**: 현재 배치의 앞 N개 이름을 Microsoft IME 사용자 구문에 기록. 가져오기 전 미리보기 표시(화면당 약 10건, 스크롤 가능), "다시 알리지 않음" 옵션 지원.
+- **배치 관리**: 드롭다운으로 배치 전환. 각 배치에 **녹/적 투톤 진행 막대**(녹색=미사용 / 빨강=사용)로 사용 현황을 실시간 표시.
+- **수동 바인딩 부족 알림**: 수동 모드에서 가져오기 수가 코드 입력 행 수를 초과하면 자동 완성 / 강제 계속 / 취소 대화상자 표시.
+- **설정 패널**: UI 언어(간/번/영/일/한)와 테마(라이트/다크/시스템) 전환, 창 항상 위에 고정.
+- **설정 영속화**: 언어·테마·구문 필드·바인딩 방식·가져오기 수·고정 상태·마지막으로 연 배치를 `config.yaml`에 저장하고 다음 실행 시 복원.
+
+## 📋 요구 사항
+
+- Windows 10 / 11
+- Node.js ≥ 18 (개발 실행용)
+- Electron 31 (종속성으로 설치)
+- Microsoft IME(병음) 설치 및 활성화
+
+## 🚀 설치 및 실행
+
+```bash
+npm install
+npm start
+# 또는
+npm run dev
+```
+
+> 참고: 이 도구는 Microsoft IME의 사용자 정의 구문 파일(`ChsPinyinEUDPv1.lex`)에 기록합니다. 가져온 후에는 IME 설정의 "사용자 정의 구문 다시 로드" 또는 IME 재시작으로 변경을 적용하세요.
+
+## 🛠 사용 방법
+
+1. **데이터 수집**: 성별과 스타일을 선택하고 "⚡수집"을 클릭해 배치를 생성·저장.
+2. **구문 필드 선택**: 상단 카드(한자 / 로마자 / 히라가나) 또는 드롭다운으로 전환. 현재 카드가 강조표시됩니다.
+3. **바인딩 방식 선택**: 수동은 행마다 코드를 입력하고 잠금; qwerty / qwerFlow는 키를 자동 배정.
+4. **배치 선택**: "데이터 배치" 드롭다운으로 전환. 진행 막대로 각 배치 사용 현황 표시.
+5. **원클릭 가져오기**: 수를 설정하고 "가져오기" 클릭, 미리보기 확인 후 IME에 기록.
+6. **되돌리기 / 지우기**: "되돌리기"로 마지막 가져오기 취소. "전체 지우기"는 모든 구문을 비웁니다(되돌리기 가능).
+
+## ⚙️ 설정 (config.yaml)
+
+`data/config.yaml` 위치:
+
+| 항목 | 설명 | 기본값 |
+| --- | --- | --- |
+| `gender` | 수집 성별 G/B/U | `G` |
+| `popularity` | 수집 스타일 popular/unique/trending | `popular` |
+| `phraseField` | 구문 필드 kanji/romaji/hiragana | `kanji` |
+| `binding` | 바인딩 방식 manual/manualGlobal/qwerty/qwerFlow | `manual` |
+| `count` | 가져오기 수 | `10` |
+| `lang` | UI 언어 zh-CN/zh-TW/en/ja/ko | `zh-CN` |
+| `theme` | 테마 light/dark/system | `system` |
+| `pinned` | 항상 위에 고정 | `false` |
+| `lastBatch` | 마지막으로 연 배치 이름(실행 시 복원) | `''` |
+| `skipImportPreview` | 가져오기 미리보기 건너뛰기 | `false` |
+| `orderMode` | 후보 위치 모드 fixed/auto | `fixed` |
+| `orderValue` | 고정 모드 후보 위치 | `1` |
+
+## 🧪 테스트
+
+```bash
+npm test
+```
+
+Dat 왕복·바인딩 전략·파서 단위 테스트 실행.
+
+## 📁 프로젝트 구조 (요약)
+
+```
+japanese-ime-tool/
+├── main.js                      # Electron 메인 프로세스
+├── preload.cjs                  # 렌더러 브리지
+├── renderer/                    # UI (HTML/CSS/JS)
+├── src/
+│   ├── implementations/binding/ # 바인딩 전략 (manual/qwerty/qwerFlow…)
+│   ├── implementations/exporter/ # 내보내기 (mschxudp / UDL / dat)
+│   ├── services/                # 가져오기 서비스
+│   └── store/                   # 설정 저장 (config.yaml)
+└── data/lang/                   # 언어 팩 (zh-CN/zh-TW/en/ja/ko)
+```
+
+## ⚠️ 주의
+
+- Windows + Microsoft IME만 지원. 사용자 정의 구문 파일 형식에 의존.
+- 가져온 구문에는 유효한 코드(트리거 코드)가 필요. 빈 코드 항목은 IME 설정에서 편집할 수 없음.
+- 수집 기능은 외부 사이트 구조에 의존하며 변경 시 동작하지 않을 수 있음.
+
+## 📄 라이선스
+
+라이선스 미지정. 사용 전 적합성을 확인하세요.
