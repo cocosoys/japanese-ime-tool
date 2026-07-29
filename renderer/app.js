@@ -45,6 +45,21 @@ async function loadLang(lang) {
   applyI18n();
 }
 
+/** 用 lang-list 动态填充语言下拉，选项显示各语言包的 language 属性（支持用户新增的其他语言） */
+async function populateLangSelect() {
+  const sel = $('#set-lang');
+  let langs = [];
+  try { langs = (await window.api.langList()) || []; } catch { langs = []; }
+  sel.innerHTML = '';
+  for (const l of langs) {
+    const opt = document.createElement('option');
+    opt.value = l.code;
+    opt.textContent = l.language || l.code;
+    sel.appendChild(opt);
+  }
+  if (state.lang) sel.value = state.lang; // 选中当前语言
+}
+
 /** 把翻译套用到所有静态元素（data-i18n / data-i18n-tip / data-i18n-ph），并重绘动态区域 */
 function applyI18n() {
   $$('[data-i18n]').forEach((n) => { n.textContent = t(n.dataset.i18n); });
@@ -1065,13 +1080,13 @@ document.addEventListener('mousedown', (e) => {
   toggleSettings(false);
 });
 
-// 语言切换
+// 语言切换（下拉由 lang-list 动态填充，选项文本即语言包的 language 属性）
 $('#set-lang').addEventListener('change', async (e) => {
   const lang = e.target.value;
   await loadLang(lang);
   window.api.saveConfig({ lang }).catch(() => {});
-  const names = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', en: 'English', ja: '日本語', ko: '한국어' };
-  setStatusBar(t('msg.langChanged', { lang: names[lang] || lang }), 'ok');
+  const opt = e.target.options[e.target.selectedIndex];
+  setStatusBar(t('msg.langChanged', { lang: (opt && opt.textContent) || lang }), 'ok');
 });
 
 // 主题切换
@@ -1114,13 +1129,15 @@ async function refreshAll() {
   const btn = $('#btn-refresh');
   btn.disabled = true;
   try {
-    // 1. 配置（含语言/主题）
-    let cfg = null;
-    try { cfg = await window.api.loadConfig(); applyConfigToUi(cfg); } catch { /* 保持现状 */ }
-    if (cfg) {
-      applyTheme(cfg.theme || 'system');
-      await loadLang(cfg.lang || 'zh-CN');
-    }
+  // 1. 配置（含语言/主题）
+  let cfg = null;
+  try { cfg = await window.api.loadConfig(); } catch { /* 保持现状 */ }
+  await populateLangSelect();
+  if (cfg) {
+    applyTheme(cfg.theme || 'system');
+    await loadLang(cfg.lang || 'zh-CN');
+    try { applyConfigToUi(cfg); } catch { /* 保持现状 */ }
+  }
     applyBindingLimit();
     // 2. 手动绑定
     try { state.batchBindings = (await window.api.loadBindings()) || {}; } catch { /* 保持现状 */ }
@@ -1142,6 +1159,19 @@ $('#btn-close').addEventListener('click', () => window.api.close());
 $('#btn-min').addEventListener('click', () => window.api.minimize());
 $('#btn-settings').addEventListener('click', () => toggleSettings());
 $('#btn-refresh').addEventListener('click', refreshAll);
+
+// 暴露动作接口：供外部脚本 / 开发工具以 api 方式触发
+// 「抓取 / 一键导入 / 一键清除 / 撤回 / 切换短语字段」效果（快捷键直接调用本地函数，不依赖此暴露）
+try {
+  window.api.capture = autoFetch;
+  window.api.doImport = doImport;
+  window.api.doClear = doClear;
+  window.api.doUndo = doUndo;
+  window.api.togglePhraseField = togglePhraseField;
+} catch {
+  // 个别环境 contextBridge 对象只读，退而挂载到独立命名空间
+  window.__appActions = { capture: autoFetch, doImport, doClear, doUndo, togglePhraseField };
+}
 
 // 固定到窗口最前面（切换 alwaysOnTop，并持久化到 config.yaml）
 $('#btn-pin').addEventListener('click', async () => {
@@ -1203,6 +1233,28 @@ document.querySelectorAll('.stat-card').forEach((card) => {
   });
 });
 
+// 快捷键 Alt+B：循环切换当前短语字段（汉字 → 罗马音 → 平假名）
+function togglePhraseField() {
+  const sel = $('#phraseField');
+  const opts = ['kanji', 'romaji', 'hiragana'];
+  const idx = opts.indexOf(sel.value);
+  const next = opts[(idx + 1) % opts.length];
+  sel.value = next;
+  sel.dispatchEvent(new Event('change'));   // 复用下拉一致的重绘 + 持久化
+  setStatusBar(t('msg.fieldSwitched', { field: t('field.' + next) }), 'ok');
+}
+
+// 全局快捷键：Alt+X 抓取 / Alt+V 一键导入 / Alt+C 一键清除 / Alt+Z 撤回 / Alt+B 切换短语字段
+document.addEventListener('keydown', (e) => {
+  if (!e.altKey) return;
+  const k = (e.key || '').toLowerCase();
+  if (k === 'x') { e.preventDefault(); autoFetch(); }
+  else if (k === 'v') { e.preventDefault(); doImport(); }
+  else if (k === 'c') { e.preventDefault(); doClear(); }
+  else if (k === 'z') { e.preventDefault(); doUndo(); }
+  else if (k === 'b') { e.preventDefault(); togglePhraseField(); }
+});
+
 ['#gender', '#popularity', '#phraseField', '#binding', '#orderMode'].forEach((sel) => {
   $(sel).addEventListener('change', persistConfig);
 });
@@ -1244,9 +1296,23 @@ function initTooltips() {
   let tipTarget = null;
 
   const show = (target) => {
+    const call = target.getAttribute('data-tip-call') || '';
     const text = target.getAttribute('data-tip') || '';
-    if (!text) { tip.classList.remove('show'); return; }
-    tip.textContent = text;
+    if (!call && !text) { tip.classList.remove('show'); return; }
+    // 用受控子节点渲染：API 调用方式（等宽代码块）+ 作用描述，避免注入且样式分离
+    tip.innerHTML = '';
+    if (call) {
+      const code = document.createElement('code');
+      code.className = 'tip-call';
+      code.textContent = call;
+      tip.appendChild(code);
+    }
+    if (text) {
+      const desc = document.createElement('div');
+      desc.className = 'tip-desc';
+      desc.textContent = text;
+      tip.appendChild(desc);
+    }
     tip.classList.add('show');
   };
   const position = (x, y) => {
@@ -1271,16 +1337,23 @@ function initTooltips() {
   });
 }
 
-// 启动
+// 启动：先检测配置完整性（异常则弹框，可隔离并重载），再初始化应用
 (async () => {
   initTooltips();
+  await checkConfigIntegrity();
+  await initApp();
+})();
+
+// 初始化应用（封装为可重跑函数，供「隔离并重载」后重新加载）
+async function initApp() {
   let cfg = null;
-  try {
-    cfg = await window.api.loadConfig();
-    applyConfigToUi(cfg);
-  } catch { /* 默认值 */ }
+  try { cfg = await window.api.loadConfig(); } catch { /* 默认值 */ }
+
+  // 先填充语言下拉，保证 applyConfigToUi 能正确选中当前语言
+  await populateLangSelect();
 
   // 主题与语言优先套用，保证首屏就是正确外观/文案
+  try { if (cfg) applyConfigToUi(cfg); } catch { /* 默认值 */ }
   applyTheme((cfg && cfg.theme) || 'system');
   await loadLang((cfg && cfg.lang) || 'zh-CN');
 
@@ -1329,4 +1402,102 @@ function initTooltips() {
   }
   // 启动完成：此后出现的新提示才显现隐藏按钮（满足"启动默认隐藏"）
   hintRevealEnabled = true;
-})();
+}
+
+/**
+ * 启动期配置完整性检测：扫描所有配置文件，发现异常时缓存并弹框；
+ * 用户可一键「隔离并重载新的配置文件」（坏文件重命名隔离后重新初始化）。
+ */
+async function checkConfigIntegrity() {
+  let issues = [];
+  try {
+    issues = (await window.api.configCheck()) || [];
+  } catch (e) {
+    console.warn('config check failed:', e);
+    return; // 检测自身失败也不阻塞启动
+  }
+  // 语言包异常由加载器从内置表自动恢复（复制回本地），不参与「隔离」弹框
+  issues = issues.filter((i) => i.kind !== 'lang');
+  if (!issues.length) return; // 无异常：正常启动
+
+  const action = await showConfigErrorDialog(issues);
+  if (action === 'isolate') {
+    try {
+      const res = await window.api.configIsolate({ issues });
+      const okN = (res || []).filter((r) => r.ok).length;
+      const failN = (res || []).length - okN;
+      if (okN) setStatusBar(t('msg.configIsolated', { n: okN }), 'ok');
+      if (failN) setStatusBar(t('msg.configIsolateFail', { n: failN }), 'err');
+    } catch (e) {
+      setStatusBar(String(e.message || e), 'err');
+    }
+  }
+}
+
+/**
+ * 配置异常提示框：列出所有异常配置文件的范围（相对路径 + 原因），
+ * 提供「隔离并重载新的配置文件」按钮。resolve('isolate' | 'ignore')。
+ */
+function showConfigErrorDialog(issues) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'dialog-overlay';
+    const box = document.createElement('div');
+    box.className = 'dialog-box';
+
+    const title = document.createElement('div');
+    title.className = 'dialog-title';
+    title.textContent = t('dialog.configError.title');
+
+    const body = document.createElement('div');
+    body.className = 'dialog-body';
+
+    const desc = document.createElement('div');
+    desc.textContent = t('dialog.configError.desc');
+    body.appendChild(desc);
+
+    const rangeLabel = document.createElement('div');
+    rangeLabel.style.marginTop = '8px';
+    rangeLabel.textContent = t('dialog.configError.range');
+    body.appendChild(rangeLabel);
+
+    const list = document.createElement('ul');
+    list.className = 'config-error-list';
+    for (const it of issues) {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.className = 'ce-name';
+      name.textContent = it.rel;
+      const r = document.createElement('span');
+      r.className = 'ce-reason';
+      r.textContent = ' — ' + it.reason;
+      li.appendChild(name);
+      li.appendChild(r);
+      list.appendChild(li);
+    }
+    body.appendChild(list);
+
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const btnIgnore = document.createElement('button');
+    btnIgnore.className = 'dialog-btn-cancel';
+    btnIgnore.textContent = t('dialog.configError.ignore');
+    const btnIsolate = document.createElement('button');
+    btnIsolate.className = 'dialog-btn-primary';
+    btnIsolate.textContent = t('dialog.configError.isolate');
+
+    const close = (val) => { overlay.remove(); resolve(val); };
+    btnIgnore.addEventListener('click', () => close('ignore'));
+    btnIsolate.addEventListener('click', () => close('isolate'));
+    // 点击遮罩空白处 = 忽略并继续
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close('ignore'); });
+
+    actions.appendChild(btnIgnore);
+    actions.appendChild(btnIsolate);
+    box.appendChild(title);
+    box.appendChild(body);
+    box.appendChild(actions);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  });
+}

@@ -7,12 +7,43 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "test": "node test/dat-roundtrip.mjs && node test/binding.test.mjs && node test/parser.test.mjs"
+    "obfuscate": "node scripts/obfuscate.mjs",
+    "pack": "npm run obfuscate && electron-builder --win --dir",
+    "dist": "npm run obfuscate && electron-builder --win",
+    "test": "node test/dat-roundtrip.mjs && node test/binding.test.mjs && node test/parser.test.mjs && node test/configIntegrity.test.mjs && node test/langRecovery.test.mjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0"
   },
   "devDependencies": {
-    "electron": "^31.0.0"
+    "electron": "^31.0.0",
+    "electron-builder": "^26.15.3",
+    "javascript-obfuscator": "^5.5.0"
+  },
+  "build": {
+    "appId": "com.cocosoys.japaneseimetool",
+    "productName": "日文IME导入工具",
+    "directories": {
+      "app": "build/app",
+      "output": "release"
+    },
+    "files": [
+      "**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/data/lang/**"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "日文IME导入工具"
+    }
   }
 }

@@ -9,6 +9,9 @@ import { ImportConfig } from './src/entities/ImportConfig.js';
 import { ConfigStore } from './src/store/configStore.js';
 import { BindingsStore } from './src/store/bindingsStore.js';
 import { Logger } from './src/store/logger.js';
+import { detectConfigIssues, isolateIssues } from './src/store/configIntegrity.js';
+import { BUILTIN_CODES, BUILTIN_LANGS } from './src/store/builtinLang.js';
+import { getLangDir, ensureLangFiles, sanitizeLangCode, LOCALE_RE, isValidLangFile } from './src/store/langPaths.js';
 import { BINDING_LIMITS } from './src/implementations/binding/BindingStrategyFactory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,7 +58,11 @@ function createWindow(initialPinned = false) {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
-app.whenReady().then(() => createWindow(readPinnedSync()));
+app.whenReady().then(async () => {
+  // 生产模式首次运行：把随包语言包复制到可写目录（userData/lang），作为运行期基础
+  try { await ensureLangFiles(); } catch { /* 不影响启动 */ }
+  createWindow(readPinnedSync());
+});
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(readPinnedSync());
 });
@@ -261,6 +268,11 @@ ipcMain.handle('batches-usage', async (_e, { field } = {}) => {
 
 // 配置读写（./data/config.yaml）
 ipcMain.handle('config-load', () => configStore.load());
+
+// 启动期配置完整性检测：扫描配置文件，返回异常清单（不崩溃，供 UI 弹框）
+ipcMain.handle('config-check', () => detectConfigIssues());
+// 隔离异常配置文件：重命名为 原名_error_<毫秒时间戳>，返回隔离结果
+ipcMain.handle('config-isolate', async (_e, { issues } = {}) => isolateIssues(issues || []));
 ipcMain.handle('config-save', async (_e, cfg) => {
   const merged = await configStore.save(cfg);
   logger.info(`配置已保存：${JSON.stringify(merged)}`);
@@ -285,17 +297,62 @@ ipcMain.handle('bindings-save-global', async (_e, { rows } = {}) => {
   return all;
 });
 
-// ─── i18n 语言包（./data/lang/<code>.json；缺失时回退 zh-CN） ───
-const LANG_DIR = path.join(process.cwd(), 'data', 'lang');
+// ─── i18n 语言包（./data/lang/<code>.json） ───
+// 可写目录由 langPaths 解析（开发 cwd/data/lang；生产 userData/lang）。
+// 加载策略：文件异常时，zh-CN/en 从代码中内置表复制一份到本地并重载；其他语言不采取任何措施。
 ipcMain.handle('lang-load', async (_e, { lang } = {}) => {
-  const code = String(lang || 'zh-CN').replace(/[^a-zA-Z-]/g, '') || 'zh-CN';
-  const tryRead = async (c) => JSON.parse(await fsp.readFile(path.join(LANG_DIR, `${c}.json`), 'utf8'));
+  // 净化并校验 locale：保留下划线（兼容 hi_IN），非法命名回退到内置默认语言
+  const raw = sanitizeLangCode(lang || 'zh-CN');
+  const code = LOCALE_RE.test(raw) ? raw : 'zh-CN';
+  const file = path.join(getLangDir(), `${code}.json`);
+  const tryRead = async (f) => JSON.parse(await fsp.readFile(f, 'utf8'));
   try {
-    return await tryRead(code);
+    return await tryRead(file);
   } catch {
-    logger.warn(`语言包 ${code}.json 读取失败，回退 zh-CN`);
-    try { return await tryRead('zh-CN'); } catch { return {}; }
+    if (BUILTIN_CODES.includes(code)) {
+      // 内置语言：从代码复制回本地并重新加载
+      try {
+        await fsp.mkdir(path.dirname(file), { recursive: true });
+        await fsp.writeFile(file, JSON.stringify(BUILTIN_LANGS[code], null, 2), 'utf8');
+        logger.info(`语言包 ${code}.json 异常，已从内置表恢复到本地`);
+        return BUILTIN_LANGS[code];
+      } catch (e) {
+        logger.error(`语言包 ${code}.json 恢复失败：${e.message}`);
+      }
+    }
+    logger.warn(`语言包 ${code}.json 异常且非内置语言，跳过（不采取任何措施）`);
+    return {};
   }
+});
+
+// 可用语言列表：扫描可写语言目录，严格按 i18n 命名格式识别，返回 [{ code, language, file }]。
+// 支持用户以 i18n 命名（<code>.json，兼容 - 与 _ 分隔）自行放入的其他语言；
+// 非 i18n 命名的 .json（如 notes.json）被忽略；异常的非内置语言不列出。
+ipcMain.handle('lang-list', async () => {
+  const langDir = getLangDir();
+  let files = [];
+  try { files = await fsp.readdir(langDir); } catch { files = []; }
+  const langs = [];
+  for (const f of files) {
+    if (!isValidLangFile(f)) continue; // 仅接受 i18n 命名，过滤无关 .json
+    const code = f.slice(0, -5);
+    const file = path.join(langDir, f);
+    try {
+      const json = JSON.parse(await fsp.readFile(file, 'utf8'));
+      langs.push({ code, language: json.language || code, file: f });
+    } catch {
+      // 异常文件：内置语言复制到本地后列入；其他语言跳过（不采取任何措施）
+      if (BUILTIN_CODES.includes(code)) {
+        try {
+          await fsp.mkdir(langDir, { recursive: true });
+          await fsp.writeFile(file, JSON.stringify(BUILTIN_LANGS[code], null, 2), 'utf8');
+          logger.info(`语言包 ${code}.json 异常，已从内置表恢复到本地（列表）`);
+          langs.push({ code, language: BUILTIN_LANGS[code].language || code, file: f });
+        } catch { /* 忽略 */ }
+      }
+    }
+  }
+  return langs;
 });
 
 // 系统主题查询（供「跟随系统」模式使用）

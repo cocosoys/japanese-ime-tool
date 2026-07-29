@@ -88,6 +88,20 @@ button.undo-btn:hover:not(:disabled) { box-shadow: 0 3px 10px rgba(116,192,252,0
 .set-actions { flex-direction: column; align-items: stretch; gap: 6px; margin-bottom: 0; }
 .set-actions button { width: 100%; font-size: 11px; white-space: normal; line-height: 1.35; padding: 7px 10px; }
 
+/* 设置面板 — 快捷键列表（显示各动作的 Alt+* 组合） */
+.set-shortcuts { align-items: flex-start; }
+.set-shortcuts > label { margin-top: 2px; }
+.shortcut-list { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.shortcut-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
+.shortcut-item span { color: #5b6770; }
+.shortcut-item kbd {
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  font-size: 10px; line-height: 1;
+  background: #eef1f4; color: #3a4750;
+  border: 1px solid #d3d9df; border-bottom-width: 2px;
+  border-radius: 5px; padding: 3px 6px;
+}
+
 /* ══════════════════════════════════════
    数据统计面板 — 三张仪表卡
    ══════════════════════════════════════ */
@@ -351,17 +365,29 @@ button.undo-btn:hover:not(:disabled) { box-shadow: 0 3px 10px rgba(116,192,252,0
    新手引导提示气泡（跟随鼠标）
    ══════════════════════════════════════ */
 .tooltip {
-  position: fixed; z-index: 9999; max-width: 250px;
+  position: fixed; z-index: 9999; max-width: 290px;
   background: rgba(33,37,41,0.97); color: #fff;
-  font-size: 11px; line-height: 1.45; padding: 7px 10px; border-radius: 8px;
+  font-size: 11px; line-height: 1.45; padding: 8px 10px; border-radius: 8px;
   pointer-events: none; opacity: 0; transform: translateY(2px);
   transition: opacity 0.12s ease, transform 0.12s ease;
   box-shadow: 0 6px 20px rgba(0,0,0,0.32);
   border: 1px solid rgba(255,255,255,0.08);
   /* 提示文字不可选中，避免误触 */
   -webkit-user-select: none; user-select: none;
+  display: flex; flex-direction: column; gap: 6px;
 }
 .tooltip.show { opacity: 1; transform: translateY(0); }
+/* API 调用方式：等宽代码块高亮，提示「可通过代码触发」 */
+.tooltip .tip-call {
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  font-size: 10.5px; line-height: 1.35;
+  background: rgba(255,255,255,0.12); color: #ffe066;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 5px; padding: 4px 7px;
+  word-break: break-all;
+}
+/* 作用描述 */
+.tooltip .tip-desc { font-size: 11px; line-height: 1.55; color: #f1f3f5; }
 
 /* ══════════════════════════════════════
    暗色主题（body.theme-dark）
@@ -566,6 +592,19 @@ body.theme-dark .dialog-body { color: #cfd6e4; }
 body.theme-dark .dialog-btn-primary { background: linear-gradient(135deg,#ff758c,#ff5e79); }
 body.theme-dark .dialog-btn-secondary { background: #2b2f3a; color: #cfd6e4; }
 body.theme-dark .dialog-btn-cancel { background: transparent; color: #8a93a2; border-color: #3a3f4d; }
+
+/* 配置异常弹框：异常文件范围列表 */
+.config-error-list {
+  margin: 6px 0 0; padding-left: 18px;
+  max-height: 190px; overflow-y: auto;
+  font-size: 11.5px; color: #868e96; line-height: 1.5;
+}
+.config-error-list li { margin: 3px 0; }
+.ce-name { color: #c2255c; font-weight: 600; word-break: break-all; }
+.ce-reason { color: #868e96; }
+body.theme-dark .config-error-list { color: #8a93a2; }
+body.theme-dark .ce-name { color: #ff8fab; }
+body.theme-dark .ce-reason { color: #8a93a2; }
 
 /* ══════════════════════════════════════
    导入预览弹窗（滚动列表）

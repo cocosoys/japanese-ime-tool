@@ -23,13 +23,7 @@
     <div id="settings-panel" class="settings-panel">
       <div class="set-row">
         <label data-i18n="set.lang">语言</label>
-        <select id="set-lang">
-          <option value="zh-CN">简体中文</option>
-          <option value="zh-TW">繁體中文</option>
-          <option value="en">English</option>
-          <option value="ja">日本語</option>
-          <option value="ko">한국어</option>
-        </select>
+        <select id="set-lang"><!-- 由 lang-list 动态填充，显示各语言包的 language 属性 --></select>
       </div>
       <div class="set-row">
         <label data-i18n="set.theme">主题</label>
@@ -45,6 +39,16 @@
       </div>
       <div class="set-row set-actions">
         <button id="set-batch-clear" data-i18n="set.batchClear" data-i18n-tip="tip.batchClear" data-tip="清空当前批次的全部手动绑定（不影响其他批次）">删除当前批次绑定</button>
+      </div>
+      <div class="set-row set-shortcuts">
+        <label data-i18n="set.shortcuts">快捷键</label>
+        <div class="shortcut-list">
+          <div class="shortcut-item" data-i18n-tip="act.fetch.tip" data-tip-call="window.api.capture()"><span data-i18n="act.fetch">抓取</span><kbd>Alt</kbd>+<kbd>X</kbd></div>
+          <div class="shortcut-item" data-i18n-tip="act.import.tip" data-tip-call="window.api.doImport()"><span data-i18n="act.import">一键导入</span><kbd>Alt</kbd>+<kbd>V</kbd></div>
+          <div class="shortcut-item" data-i18n-tip="act.clear.tip" data-tip-call="window.api.doClear()"><span data-i18n="act.clear">一键清除</span><kbd>Alt</kbd>+<kbd>C</kbd></div>
+          <div class="shortcut-item" data-i18n-tip="act.undo.tip" data-tip-call="window.api.doUndo()"><span data-i18n="act.undo">撤回</span><kbd>Alt</kbd>+<kbd>Z</kbd></div>
+          <div class="shortcut-item" data-i18n-tip="act.toggleField.tip" data-tip-call="window.api.togglePhraseField()"><span data-i18n="act.toggleField">切换短语字段</span><kbd>Alt</kbd>+<kbd>B</kbd></div>
+        </div>
       </div>
     </div>
 

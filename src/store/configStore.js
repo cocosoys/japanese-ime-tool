@@ -13,7 +13,7 @@ const DEFAULTS = {
   phraseField: 'kanji',   // 短语字段：kanji/romaji/hiragana
   binding: 'manual',      // 绑定方式：manual/qwerty/qwerFlow
   count: 10,              // 导入数量
-  lang: 'zh-CN',          // 界面语言：zh-CN/zh-TW/en/ja/ko（语言包位于 ./data/lang/*.json）
+  lang: 'zh-CN',          // 界面语言：任意 i18n 命名语言包（位于 ./data/lang/<code>.json，按命名格式动态加载）
   theme: 'system',        // 主题：light/dark/system（跟随系统）
   pinned: false,           // 固定窗口到最前面（置顶）：true 置顶 / false 取消（默认不置顶，由 config.yaml 决定）
   lastBatch: '',            // 上次打开的数据批次名（启动据此自动恢复；丢失/异常时清空加载）
