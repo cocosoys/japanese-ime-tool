@@ -184,7 +184,14 @@ export const BUILTIN_LANGS = {
     "closeModal.body": "请选择操作：",
     "closeModal.minimize": "隐藏图标",
     "closeModal.closeApp": "关闭应用",
-    "closeModal.remember": "记住我的选择"
+    "closeModal.remember": "记住我的选择",
+    "tip.info": "关于本工具",
+    "about.title": "关于",
+    "about.github": "GitHub 仓库",
+    "about.version": "版本",
+    "about.author": "作者",
+    "about.copyright": "版权",
+    "about.close": "关闭"
   },
   'en':   {
     "language": "English",
@@ -367,6 +374,13 @@ export const BUILTIN_LANGS = {
     "closeModal.body": "Choose an action:",
     "closeModal.minimize": "Hide Icon",
     "closeModal.closeApp": "Close",
-    "closeModal.remember": "Remember my choice"
+    "closeModal.remember": "Remember",
+    "tip.info": "About this tool",
+    "about.title": "About",
+    "about.github": "GitHub Repository",
+    "about.version": "Version",
+    "about.author": "Author",
+    "about.copyright": "Copyright",
+    "about.close": "Close"
   }
 };

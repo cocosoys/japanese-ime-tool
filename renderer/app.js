@@ -1172,6 +1172,13 @@ $('#api-doc-link')?.addEventListener('click', (e) => {
   if (url) window.api.openExternal({ path: url }).catch(() => {});
 });
 
+// 点击「关于」窗口中的 GitHub 链接 → 在系统默认浏览器中打开
+$('#about-github')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  const url = e.currentTarget.dataset.url;
+  if (url) window.api.openExternal({ path: url }).catch(() => {});
+});
+
 // 语言切换（下拉由 lang-list 动态填充，选项文本即语言包的 language 属性）
 $('#set-lang').addEventListener('change', async (e) => {
   const lang = e.target.value;
@@ -1281,6 +1288,18 @@ function hideCloseModal() {
   if (modal) modal.classList.add('hidden');
 }
 
+/** 显示「关于」窗口 */
+function showAbout() {
+  const modal = $('#about-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+
+/** 隐藏「关于」窗口 */
+function hideAbout() {
+  const modal = $('#about-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
 /** 用户在模态框中选择操作 */
 async function onCloseChoice(action) {
   const cb = $('#close-modal-remember');
@@ -1311,6 +1330,13 @@ $('#btn-refresh').addEventListener('click', refreshAll);
 // 关闭模态框按钮
 $('#close-modal-close')?.addEventListener('click', () => onCloseChoice('close'));
 $('#close-modal-minimize')?.addEventListener('click', () => onCloseChoice('minimize'));
+
+// 关于窗口：i 按钮打开、关闭按钮与点击遮罩关闭
+$('#btn-info')?.addEventListener('click', showAbout);
+$('#about-close')?.addEventListener('click', hideAbout);
+$('#about-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'about-modal') hideAbout();
+});
 // 点击模态框背景层关闭
 $('#close-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) hideCloseModal(); });
 

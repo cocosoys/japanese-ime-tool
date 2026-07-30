@@ -782,6 +782,53 @@ body.theme-dark .btn-secondary { background: #2b2f3a; color: #cfd6e4; }
 body.theme-dark .btn-danger { background: linear-gradient(135deg,#ff758c,#e03131); }
 body.theme-dark .close-modal-remember { color: #8a93a2; }
 
+/* ══════════════════════════════════════
+   关于窗口（点击右上角 i 按钮）
+   ══════════════════════════════════════ */
+.about-modal {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,0.45); display: flex;
+  align-items: center; justify-content: center;
+}
+.about-modal.hidden { display: none; }
+.about-box {
+  width: 320px; max-width: 90vw;
+  background: #fff; border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  padding: 22px; display: flex; flex-direction: column; gap: 16px;
+}
+.about-title {
+  font-size: 15px; font-weight: 700; color: #c2255c;
+  display: flex; align-items: center; gap: 6px;
+}
+.about-content {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.about-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: #1c7ed6; text-decoration: none;
+  word-break: break-all; cursor: pointer;
+}
+.about-link:hover { text-decoration: underline; color: #1971c2; }
+.about-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12.5px; line-height: 1.6;
+}
+.about-label { color: #868e96; }
+.about-value { color: #495057; font-weight: 600; }
+/* 关闭按钮：底端居中 */
+.about-box > .btn-sm {
+  align-self: center; padding: 8px 22px; font-size: 12px; border-radius: 8px;
+  cursor: pointer; font-weight: 600; border: none; transition: all 0.15s;
+}
+/* 关于窗口暗色 */
+body.theme-dark .about-box { background: #232733; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+body.theme-dark .about-title { color: #ff8fab; }
+body.theme-dark .about-link { color: #74c0fc; }
+body.theme-dark .about-link:hover { color: #a5d8ff; }
+body.theme-dark .about-label { color: #8a93a2; }
+body.theme-dark .about-value { color: #cfd6e4; }
+
 /* 配置异常弹框：异常文件范围列表 */
 .config-error-list {
   margin: 6px 0 0; padding-left: 18px;

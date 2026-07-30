@@ -19,7 +19,9 @@
 - **数据批次管理**：下拉切换批次；每个批次右侧有**绿红双色进度条**（绿 = 未使用 / 红 = 已使用）实时显示使用情况。
 - **手动绑定不足提示**：手动模式下若导入数量大于已填写编码行数，弹窗让你选择自动补全 / 强制继续 / 取消。
 - **设置面板**：切换界面语言（简 / 繁 / 英 / 日 / 韩）与主题（亮 / 暗 / 跟随系统）；固定窗口到最前（置顶）。
-- **配置持久化**：语言、主题、短语字段、绑定方式、导入数量、置顶状态、上次打开的批次等均记入 `config.yaml`，下次启动自动恢复。
+- **本地 HTTP API**：内置本地 API 服务（绑定 `127.0.0.1`），可在设置面板启停；启用时下方显示 API 文档地址（`docs/api-docs.html`），便于开发者集成与自动化。
+- **关闭行为**：点击关闭按钮弹出选择（关闭应用 / 隐藏到托盘），可勾选「记住我的选择」将选择持久化，下次启动直接生效。
+- **配置持久化**：语言、主题、短语字段、绑定方式、导入数量、置顶状态、API 开关、关闭行为、上次打开的批次等均记入 `config.yaml`，下次启动自动恢复。
 
 ## 📋 环境要求
 
@@ -69,6 +71,19 @@ npm run dev
 | `skipImportPreview` | 是否跳过导入预览 | `false` |
 | `orderMode` | 候选位置模式 fixed/auto | `fixed` |
 | `orderValue` | 固定模式候选位置 | `1` |
+| `apiEnabled` | 本地 HTTP API 是否启用 | `true` |
+| `apiPort` | 本地 HTTP API 监听端口 | `18765` |
+| `closeBehavior` | 关闭按钮行为：ask=询问 / close=直接关闭 / minimize=隐藏到托盘 | `ask` |
+
+## 🔌 本地 API（开发者）
+
+内置一个仅监听 `127.0.0.1` 的本地 HTTP API，用于脚本化导入 / 导出 / 查询短语。
+
+- **启用 / 停用**：设置面板「本地 API」右侧的「已启用」文字可一键启停；启用状态下其下方显示 API 文档地址。
+- **持久化**：开关状态与端口写入 `config.yaml`（`apiEnabled` / `apiPort`），重启后保留。
+- **文档**：完整端点列表、参数与 `curl` 示例见 **`docs/api-docs.html`**（在设置面板启用 API 后点击文档链接即可打开，或直接在浏览器打开该文件）。
+
+> 注意：API 仅绑定本机回环地址，不对外网暴露；请勿在不可信的共享环境下长期开启。
 
 ## 🧪 测试
 
@@ -86,10 +101,13 @@ japanese-ime-tool/
 ├── preload.cjs                  # 渲染进程桥接
 ├── renderer/                    # 界面（HTML/CSS/JS）
 ├── src/
+│   ├── api/                     # 本地 HTTP API 服务
 │   ├── implementations/binding/ # 绑定策略（manual/qwerty/qwerFlow…）
 │   ├── implementations/exporter/ # 导出器（mschxudp / UDL / dat）
 │   ├── services/                # 导入服务
 │   └── store/                   # 配置存储（config.yaml）
+├── docs/
+│   └── api-docs.html            # 本地 API 文档（规范样式）
 └── data/lang/                   # 多语言包（zh-CN/zh-TW/en/ja/ko）
 ```
 

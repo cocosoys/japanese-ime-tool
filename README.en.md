@@ -19,7 +19,9 @@ A small Electron floating-window tool for Windows that scrapes Japanese names (k
 - **Batch management**: switch batches via dropdown; each batch has a **green/red dual-color progress bar** (green = unused / red = used) showing usage in real time.
 - **Manual-binding shortage prompt**: in Manual mode, if the import count exceeds the number of rows with a code filled, a dialog lets you auto-complete / force-continue / cancel.
 - **Settings panel**: switch UI language (zh/zh-TW/en/ja/ko) and theme (light/dark/system); pin the window on top.
-- **Persistent config**: language, theme, phrase field, binding mode, import count, pin state, and last opened batch are saved to `config.yaml` and restored on next launch.
+- **Local HTTP API**: a built-in local API service (bound to `127.0.0.1`) that can be toggled from the settings panel; when enabled, the API documentation link (`docs/api-docs.html`) is shown below it, handy for developers to integrate or automate.
+- **Close behavior**: clicking the close button shows a choice (close the app / hide to tray). You can tick "Remember" to persist it and apply directly on next launch.
+- **Persistent config**: language, theme, phrase field, binding mode, import count, pin state, API toggle, close behavior, and last opened batch are saved to `config.yaml` and restored on next launch.
 
 ## 📋 Requirements
 
@@ -66,6 +68,19 @@ Located at `data/config.yaml`:
 | `skipImportPreview` | Skip import preview | `false` |
 | `orderMode` | Candidate position mode fixed/auto | `fixed` |
 | `orderValue` | Fixed-mode candidate position | `1` |
+| `apiEnabled` | Whether the local HTTP API is enabled | `true` |
+| `apiPort` | Local HTTP API listening port | `18765` |
+| `closeBehavior` | Close-button behavior: ask=prompt / close=quit directly / minimize=hide to tray | `ask` |
+
+## 🔌 Local API (for developers)
+
+A built-in local HTTP API bound only to `127.0.0.1`, for scripting import / export / query of phrases.
+
+- **Enable / disable**: click the "Enabled" text on the right of "Local API" in the settings panel to toggle it; when enabled, the API documentation link is shown below.
+- **Persistence**: toggle state and port are written to `config.yaml` (`apiEnabled` / `apiPort`) and survive restarts.
+- **Docs**: full endpoint list, parameters, and `curl` examples are in **`docs/api-docs.html`** (open via the doc link after enabling the API in settings, or open the file directly in a browser).
+
+> Note: the API binds only to the local loopback address and is not exposed to the network; do not keep it enabled for long on an untrusted shared machine.
 
 ## 🧪 Tests
 
@@ -83,10 +98,13 @@ japanese-ime-tool/
 ├── preload.cjs                  # Renderer bridge
 ├── renderer/                    # UI (HTML/CSS/JS)
 ├── src/
+│   ├── api/                     # Local HTTP API service
 │   ├── implementations/binding/ # Binding strategies (manual/qwerty/qwerFlow…)
 │   ├── implementations/exporter/ # Exporters (mschxudp / UDL / dat)
 │   ├── services/                # Import service
 │   └── store/                   # Config storage (config.yaml)
+├── docs/
+│   └── api-docs.html            # Local API docs (styled)
 └── data/lang/                   # Language packs (zh-CN/zh-TW/en/ja/ko)
 ```
 
