@@ -21,6 +21,52 @@ function u16(n) {
 }
 
 export class MsPinyinDatExporter extends PhraseExporter {
+  /**
+   * 解析现有 machxudp 文件（旧版自定义短语位置），返回 {code, word, candidate} 数组。
+   * 格式与 mschxudp 词条体一致：magic 0x00100010 | u16(codeLen=codeChars+0x12) |
+   * order(1) | 0x06(1) | 4 空 | 时间戳(4) | code(utf16) | 00 00 | word(utf16) | 00 00
+   * @param {string} filePath
+   * @returns {Promise<Array<{code:string, word:string, candidate:number}>>}
+   */
+  async parse(filePath) {
+    let buf;
+    try { buf = await this._readFile(filePath); } catch { return []; }
+    if (!buf || buf.length < 0x40) return [];
+    if (buf.toString('ascii', 0, 8) !== 'machxudp') return [];
+    const count = buf.readUInt32LE(28);
+    const offStart = buf.readUInt32LE(16);
+    const pStart = buf.readUInt32LE(20);
+    if (!offStart || !pStart) return [];
+    const offsets = [];
+    for (let i = 0; i < count; i++) offsets.push(buf.readUInt32LE(offStart + i * 4));
+    offsets.push(buf.readUInt32LE(24) - pStart);
+
+    const out = [];
+    let p = pStart;
+    for (let i = 0; i < count; i++) {
+      if (p + 16 > buf.length) break;
+      if (buf.readUInt32LE(p) !== 0x00100010) break;
+      const codeChars = buf.readUInt16LE(p + 4) - 0x12;
+      const order = buf.readUInt8(p + 6);
+      if (codeChars < 0) break;
+      const codeBytes = codeChars * 2;
+      const code = buf.slice(p + 16, p + 16 + codeBytes).toString('utf16le');
+      const wordStart = p + 16 + codeBytes + 2;            // 跳过 code 后的 00 00
+      const wordBytes = (offsets[i + 1] - offsets[i]) - 16 - codeBytes - 4;
+      if (wordBytes < 0) break;
+      const word = buf.slice(wordStart, wordStart + wordBytes).toString('utf16le');
+      out.push({ code, word, candidate: order });
+      p = pStart + offsets[i + 1];
+    }
+    return out;
+  }
+
+  /** 读取文件（小封装，便于测试注入） */
+  async _readFile(fp) {
+    const fs = await import('fs');
+    return fs.promises.readFile(fp);
+  }
+
   /** @param {Array<{code:string, word:string, order?:number}>} records */
   export(records) {
     const stamp = Math.floor(Date.now() / 1000) >>> 0;
@@ -31,13 +77,14 @@ export class MsPinyinDatExporter extends PhraseExporter {
     let cumulative = 0;
 
     for (let i = 0; i < count; i++) {
-      const code = Buffer.from((records[i].code || '').normalize('NFC'), 'utf16le');
+      const codeStr = (records[i].code || '').normalize('NFC');
+      const code = Buffer.from(codeStr, 'utf16le');
       const word = Buffer.from((records[i].word || '').normalize('NFC'), 'utf16le');
       const order = (records[i].order ?? (i + 1)) & 0xff;
 
       const entry = Buffer.concat([
         Buffer.from([0x10, 0x00, 0x10, 0x00]),
-        u16(code.length + 0x12),
+        u16(codeStr.length + 0x12),
         Buffer.from([order, 0x06]),
         Buffer.alloc(4),
         u32(stamp),

@@ -158,4 +158,16 @@ export class TempJsonStore {
     await fs.writeFile(fp, JSON.stringify([...new Set(usedList)], null, 2), 'utf8');
     return fp;
   }
+
+  /**
+   * 删除指定批次目录（含 name.json / used.json / response.html 等所有数据）。
+   * 关联绑定的清理由调用方负责（见 BindingsStore.saveBatch(batch, {})）。
+   * @param {string} batch - 批次目录名
+   */
+  async deleteBatch(batch) {
+    if (!batch) return false;
+    const dir = path.join(this.baseDir, batch);
+    await fs.rm(dir, { recursive: true, force: true });
+    return true;
+  }
 }

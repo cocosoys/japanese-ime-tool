@@ -36,38 +36,21 @@
       <div class="set-row set-actions">
         <button id="set-global-save" data-i18n="set.globalSave" data-i18n-tip="tip.globalSave" data-tip="把当前批次的手动绑定保存为全局默认">存当前批次绑定为全局</button>
         <button id="set-global-clear" data-i18n="set.globalClear" data-i18n-tip="tip.globalClear" data-tip="删除全局默认绑定">清除全局默认绑定</button>
-      </div>
-      <div class="set-row set-actions">
         <button id="set-batch-clear" data-i18n="set.batchClear" data-i18n-tip="tip.batchClear" data-tip="清空当前批次的全部手动绑定（不影响其他批次）">删除当前批次绑定</button>
       </div>
       <div class="set-row set-shortcuts">
         <label data-i18n="set.shortcuts">快捷键</label>
-        <div class="shortcut-list">
-          <div class="shortcut-item" data-i18n-tip="act.fetch.tip" data-tip-call="window.api.capture()"><span data-i18n="act.fetch">抓取</span><kbd>Alt</kbd>+<kbd>X</kbd></div>
-          <div class="shortcut-item" data-i18n-tip="act.import.tip" data-tip-call="window.api.doImport()"><span data-i18n="act.import">一键导入</span><kbd>Alt</kbd>+<kbd>V</kbd></div>
-          <div class="shortcut-item" data-i18n-tip="act.clear.tip" data-tip-call="window.api.doClear()"><span data-i18n="act.clear">一键清除</span><kbd>Alt</kbd>+<kbd>C</kbd></div>
-          <div class="shortcut-item" data-i18n-tip="act.undo.tip" data-tip-call="window.api.doUndo()"><span data-i18n="act.undo">撤回</span><kbd>Alt</kbd>+<kbd>Z</kbd></div>
-          <div class="shortcut-item" data-i18n-tip="act.toggleField.tip" data-tip-call="window.api.togglePhraseField()"><span data-i18n="act.toggleField">切换短语字段</span><kbd>Alt</kbd>+<kbd>B</kbd></div>
-        </div>
+        <div class="shortcut-list" id="shortcut-list"><!-- 由 renderShortcuts() 动态填充：组合键 + 录制 + 启用/禁用 --></div>
+      </div>
+      <div class="set-row set-api">
+        <label data-i18n="set.api">本地API</label>
+        <span id="api-status" class="api-status">—</span>
+      </div>
+      <div class="set-row set-api-doc hidden" id="api-doc-row">
+        <label data-i18n="set.api.doc">文档</label>
+        <a id="api-doc-link" class="api-doc-link" href="#" data-i18n="set.api.doc.link">API 文档地址</a>
       </div>
     </div>
-
-    <!-- 抓取面板 -->
-    <section class="panel">
-      <div class="row">
-        <select id="gender" data-i18n-tip="tip.gender" data-tip="选择生成名字的性别倾向：女名 / 男名 / 中性">
-          <option value="G" data-i18n="gender.G">女名</option>
-          <option value="B" data-i18n="gender.B">男名</option>
-          <option value="U" data-i18n="gender.U">中性</option>
-        </select>
-        <select id="popularity" data-i18n-tip="tip.popularity" data-tip="选择名字风格：热门 / 独特 / 流行">
-          <option value="popular" data-i18n="pop.popular">热门</option>
-          <option value="unique" data-i18n="pop.unique">独特</option>
-          <option value="trending" data-i18n="pop.trending">流行</option>
-        </select>
-        <button id="btn-auto" class="auto" data-i18n="btn.fetch" data-i18n-tip="tip.fetch" data-tip="从 namechef 抓取一批日文名并保存到本地批次">⚡抓取</button>
-      </div>
-    </section>
 
     <!-- 数据统计面板：三张仪表卡 -->
     <section class="panel stats-panel">
@@ -113,7 +96,7 @@
 
     <!-- 批次与导入控制 -->
     <section class="panel">
-      <div class="row">
+      <div class="row batch-row">
         <label class="lbl small" data-i18n="lbl.batch">数据批次</label>
         <div class="batch-select">
           <button id="batch-btn" class="batch-btn" type="button" data-i18n-tip="tip.batch" data-tip="选择要操作的数据批次（按抓取时间命名）">
@@ -122,6 +105,21 @@
           </button>
           <div id="batch-list" class="batch-list hidden"></div>
         </div>
+        <select id="gender" class="mini" data-i18n-tip="tip.gender" data-tip="选择生成名字的性别倾向：女名 / 男名 / 中性">
+          <option value="G" data-i18n="gender.G">女名</option>
+          <option value="B" data-i18n="gender.B">男名</option>
+          <option value="U" data-i18n="gender.U">中性</option>
+        </select>
+        <select id="popularity" class="mini" data-i18n-tip="tip.popularity" data-tip="选择名字风格：热门 / 独特 / 流行">
+          <option value="popular" data-i18n="pop.popular">热门</option>
+          <option value="unique" data-i18n="pop.unique">独特</option>
+          <option value="trending" data-i18n="pop.trending">流行</option>
+        </select>
+        <button id="btn-auto" class="auto mini" data-i18n="btn.fetch" data-i18n-tip="tip.fetch" data-tip="从 namechef 抓取一批日文名并保存到本地批次">⚡抓取</button>
+      </div>
+      <!-- 批次右击上下文菜单：选择删除数据批次 -->
+      <div id="batch-ctx-menu" class="ctx-menu hidden">
+        <div class="ctx-item ctx-del" data-i18n="batch.ctx.delete">删除批次</div>
       </div>
       <div class="row">
         <label class="lbl small" data-i18n="lbl.phraseField">短语字段</label>
@@ -176,6 +174,22 @@
         <div id="dialog-title" class="dialog-title"></div>
         <div id="dialog-body" class="dialog-body"></div>
         <div id="dialog-actions" class="dialog-actions"></div>
+      </div>
+    </div>
+
+    <!-- 关闭确认模态框（选择关闭 / 隐藏图标 + 记住选择） -->
+    <div id="close-modal" class="close-modal hidden">
+      <div class="close-modal-box">
+        <div class="close-modal-title" data-i18n="closeModal.title">关闭应用</div>
+        <div class="close-modal-body" data-i18n="closeModal.body">请选择操作：</div>
+        <div class="close-modal-actions">
+          <button id="close-modal-minimize" class="btn btn-sm btn-secondary" data-i18n="closeModal.minimize">隐藏图标</button>
+          <button id="close-modal-close" class="btn btn-sm btn-danger" data-i18n="closeModal.closeApp">关闭应用</button>
+        </div>
+        <div class="close-modal-remember">
+          <input type="checkbox" id="close-modal-remember" />
+          <label for="close-modal-remember" class="close-modal-remember-text" data-i18n="closeModal.remember">记住我的选择</label>
+        </div>
       </div>
     </div>
   </div>

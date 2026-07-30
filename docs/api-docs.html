@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>japanese-ime-tool — Local HTTP API Docs</title>
+  <style>
+    :root {
+      --bg: #f8f9fa; --surface: #fff; --text: #1a1a2e; --text2: #495057;
+      --primary: #4c6ef5; --primary-light: #e7f5ff; --green: #2b8a3e; --red: #c92a2a;
+      --orange: #e67700; --border: #dee2e6; --code-bg: #f1f3f5; --method-get: #2b8a3e;
+      --method-post: #1864ab; --method-delete: #c92a2a; --tag-bg: rgba(76,110,245,0.08);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0d1117; --surface: #161b22; --text: #e2e6ee; --text2: #8b949e;
+        --primary: #58a6ff; --primary-lite: rgba(88,166,255,0.15); --green: #3fb950;
+        --red: #f85149; --orange: #d29922; --border: #30363d; --code-bg: #161b22; }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.6; padding: 24px; }
+    .container { max-width: 960px; margin: 0 auto; }
+
+    /* Header */
+    .header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; padding-bottom: 20px;
+      border-bottom: 2px solid var(--border); }
+    .header-icon { width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg,#ff758c,#ff5e79);
+      display: flex; align-items: center; justify-content: center; color: #fff; font-size: 22px; font-weight: 800; flex-shrink: 0; }
+    .header h1 { font-size: 24px; font-weight: 700; }
+    .header h1 small { display: block; font-size: 13px; font-weight: 400; color: var(--text2); margin-top: 4px; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+      background: var(--tag-bg); color: var(--primary); border: 1px solid rgba(76,110,245,0.2); vertical-align: middle; margin-left: 8px; }
+
+    /* Info bar */
+    .info-bar { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+    .info-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 18px; flex: 1; min-width: 180px; }
+    .info-card h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text2);
+      margin-bottom: 4px; font-weight: 600; }
+    .info-card p { font-size: 15px; font-weight: 700; font-family: "SF Mono", Consolas, monospace; word-break: break-all; }
+
+    /* Section */
+    .section { margin-bottom: 36px; }
+    .section-title { font-size: 17px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .section-title::before { content: ""; width: 4px; height: 18px; border-radius: 2px; background: var(--primary); }
+
+    /* Endpoint card */
+    .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      margin-bottom: 14px; overflow: hidden; transition: box-shadow 0.15s; }
+    .endpoint:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+    .ep-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer;
+      user-select: none; border-bottom: 1px solid transparent; transition: border-color 0.15s, background 0.12s; }
+    .ep-head:hover { background: rgba(0,0,0,0.02); border-bottom-color: var(--border); }
+    .method { padding: 3px 10px; border-radius: 5px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; flex-shrink: 0; font-family: "SF Mono", Consolas, monospace; }
+    .method.get { background: rgba(43,138,62,0.12); color: var(--method-get); }
+    .method.post { background: rgba(24,100,171,0.12); color: var(--method-post); }
+    .method.delete { background: rgba(201,42,42,0.12); color: var(--method-delete); }
+    .ep-path { font-family: "SF Mono", Consolas, monospace; font-size: 14px; font-weight: 600; flex: 1;
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ep-summary { font-size: 12px; color: var(--text2); flex-shrink: 0; }
+    .ep-arrow { color: var(--text2); font-size: 12px; transition: transform 0.2s; flex-shrink: 0; }
+    .endpoint.open .ep-arrow { transform: rotate(90deg); }
+    .endpoint.open .ep-head { border-bottom-color: var(--border); background: rgba(0,0,0,0.02); }
+
+    .ep-body { padding: 0 16px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease; }
+    .endpoint.open .ep-body { max-height: 600px; padding: 14px 16px 18px; overflow-y: auto; }
+
+    /* Description block */
+    .desc { font-size: 13px; color: var(--text2); margin-bottom: 14px; line-height: 1.65; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 12px; }
+    th { text-align: left; background: var(--code-bg); padding: 7px 10px; border: 1px solid var(--border);
+      font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text2); }
+    td { padding: 7px 10px; border: 1px solid var(--border); vertical-align: top; word-break: break-word; }
+    td:first-child { font-weight: 600; font-family: "SF Mono", Consolas, monospace; font-size: 12px; white-space: nowrap; }
+    tr:nth-child(even) td { background: rgba(0,0,0,0.015); }
+    .required { color: var(--red); font-size: 10px; font-weight: 700; margin-left: 3px; }
+    .optional { color: var(--text2); font-size: 10px; font-weight: 400; margin-left: 3px; }
+    .type-tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10.5px;
+      background: var(--code-bg); border: 1px solid var(--border); font-family: "SF Mono", Consolas, monospace; }
+
+    /* Response example */
+    .resp-example { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 14px; margin-top: 10px; overflow-x: auto; }
+    .resp-example pre { font-family: "SF Mono", "Cascadia Code", Consolas, monospace; font-size: 12px;
+      line-height: 1.55; color: var(--text); white-space: pre; }
+
+    /* Sub-section in endpoint body */
+    .sub-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+      color: var(--text2); margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+    .sub-title:first-child { margin-top: 0; }
+
+    /* Error responses */
+    .error-note { background: rgba(201,42,42,0.06); border-left: 3px solid var(--red);
+      padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 12px; margin-top: 10px; }
+    .error-note code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+    /* Footer */
+    footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border);
+      text-align: center; font-size: 11px; color: var(--text2); }
+
+    /* Code inline */
+    code { font-family: "SF Mono", Consolas, monospace; font-size: 0.9em;
+      background: var(--code-bg); padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">漢</div>
+    <div>
+      <h1>Local HTTP API <span class="badge">v1</span><small>japanese-ime-tool — 日文名 → 输入法短语</small></h1>
+    </div>
+  </div>
+
+  <!-- Info cards -->
+  <div class="info-bar">
+    <div class="info-card">
+      <h3>Base URL</h3>
+      <p>http://127.0.0.1:<span id="default-port">18765</span></p>
+    </div>
+    <div class="info-card">
+      <h3>Host</h3>
+      <p>127.0.0.1 (localhost only)</p>
+    </div>
+    <div class="info-card">
+      <h3>Content-Type</h3>
+      <p>application/json; charset=utf-8</p>
+    </div>
+    <div class="info-card">
+      <h3>Response Shape</h3>
+      <p>{ ok: bool, data|error }</p>
+    </div>
+  </div>
+
+  <!-- Overview -->
+  <div class="section">
+    <div class="section-title">Overview / 概述</div>
+    <div class="desc">
+      本地 HTTP API 服务提供 RESTful 风格的网络接口，供本地脚本或外部程序以 HTTP 方式调用工具各项功能。
+      服务仅绑定 <code>127.0.0.1</code>（本机回环），不对外暴露。所有请求/响应均为 JSON 格式。
+      成功响应统一为 <code>{ ok: true, data: ... }</code>，失败为 <code>{ ok: false, error: "..." }</code>。
+      端口可在 config.yaml 中通过 <code>apiPort</code> 配置（默认 18765），通过 <code>apiEnabled</code> 控制启停。
+    </div>
+  </div>
+
+  <!-- ═══════ Endpoints ═══════ -->
+
+  <!-- GET /api -->
+  <div class="section">
+    <div class="section-title">Endpoints / 接口列表</div>
+
+    <div class="endpoint open">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api</span>
+        <span class="ep-summary">API 信息与端点索引</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">返回服务名称、使用说明及所有可用端点列表。适合用作健康检查与服务发现。</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>service</td><td><span class="type-tag">string</span></td><td>服务标识名：&quot;japanese-ime-tool&quot;</td></tr>
+          <tr><td>note</td><td><span class="type-tag">string</span></td><td>使用说明</td></tr>
+          <tr><td>endpoints</td><td><span class="type-tag">string[]</span></td><td>所有可用端点的简要列表</td></tr>
+        </table>
+        <div class="resp-example"><pre>{
+  "ok": true,
+  "data": {
+    "service": "japanese-ime-tool",
+    "note": "仅监听 127.0.0.1（本机）。请求体为 JSON，响应统一 { ok, data|error }。",
+    "endpoints": [
+      "GET  /api/health",
+      "GET  /api/fields",
+      ...
+    ]
+  }
+}</pre></div>
+      </div>
+    </div>
+
+    <!-- GET /api/health -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api/health</span>
+        <span class="ep-summary">健康检查</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">检查 API 服务是否正常运行。返回进程运行时间（秒）。</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>ok</td><td><span class="type-tag">boolean</span></td><td>始终为 true</td></tr>
+          <tr><td>uptime</td><td><span class="type-tag">number</span></td><td>进程运行时间（秒）</td></tr>
+        </table>
+        <div class="resp-example"><pre>{ "ok": true, "data": { "ok": true, "uptime": 362.18 } }</pre></div>
+      </div>
+    </div>
+
+    <!-- GET /api/fields -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api/fields</span>
+        <span class="ep-summary">短语字段字典</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">获取可用的名称维度字段及其多语言标签。用于构建 UI 下拉选项或验证字段参数。</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>fields</td><td><span class="type-tag">Array&lt;{value,label}&gt;</span></td><td>字段值与标签映射</td></tr>
+        </table>
+        <div class="resp-example"><pre>{
+  "ok": true,
+  "data": {
+    "fields": [
+      { "value": "kanji", "label": "汉字" },
+      { "value": "romaji", "label": "罗马音" },
+      { "value": "hiragana", "label": "平假名" }
+    ]
+  }
+}</pre></div>
+      </div>
+    </div>
+
+    <!-- GET /api/batches -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api/batches</span>
+        <span class="ep-summary">获取所有数据批次</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">返回所有已保存的数据批次目录名列表（按时间倒序，最新的在前）。</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>batches</td><td><span class="type-tag">string[]</span></td><td>批次名数组（如 [&quot;2026-07-29_1025&quot;, &quot;2026-07-28_1537&quot;]）</td></tr>
+        </table>
+        <div class="resp-example"><pre>{ "ok": true, "data": { "batches": ["2026-07-29_1025", "2026-07-28_1537"] } }</pre></div>
+      </div>
+    </div>
+
+    <!-- GET /api/batches/usage -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api/batches/usage?field=kanji</span>
+        <span class="ep-summary">批次使用情况统计</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">按指定字段维度统计各批次的已用/总数进度。</div>
+        <div class="sub-title">Query Parameters</div>
+        <table>
+          <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>field</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>统计维度：kanji / romaji / hiragana（默认 kanji）</td></tr>
+        </table>
+        <div class="sub-title">Response Fields</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>usage</td><td><span class="type-tag">Array&lt;{batch,used,total}&gt;</span></td><td>各批次使用情况</td></tr>
+          <tr><td>usage[].batch</td><td><span class="type-tag">string</span></td><td>批次名</td></tr>
+          <tr><td>usage[].used</td><td><span class="type-tag">number</span></td><td>已使用数量</td></tr>
+          <tr><td>usage[].total</td><td><span class="type-tag">number</span></td><td>总数量</td></tr>
+        </table>
+        <div class="resp-example"><pre>{
+  "ok": true,
+  "data": {
+    "usage": [
+      { "batch": "2026-07-29_1025", "used": 5, "total": 21 },
+      { "batch": "2026-07-28_1537", "used": 21, "total": 21 }
+    ]
+  }
+}</pre></div>
+      </div>
+    </div>
+
+    <!-- GET /api/batch/:batch/entries -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method get">GET</span>
+        <span class="ep-path">/api/batch/:batch/entries?field=kanji&amp;count=10</span>
+        <span class="ep-summary">获取批次条目列表</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">获取指定数据批次中的名字条目列表。</div>
+        <div class="sub-title">Path Parameters</div>
+        <table>
+          <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>batch</td><td><span class="type-tag">string</span></td><td>Yes<span class="required">*</span></td><td>批次目录名（URL 路径参数）</td></tr>
+        </table>
+        <div class="sub-title">Query Parameters</div>
+        <table>
+          <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>field</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>主字段（默认 kanji），决定 field 字段取哪个值</td></tr>
+          <tr><td>count</td><td><span class="type-tag">integer</span></td><td>No<span class="optional"></span></td><td>返回数量限制（默认全部）</td></tr>
+        </table>
+        <div class="sub-title">Response Fields</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>batch</td><td><span class="type-tag">string</span></td><td>请求的批次名</td></tr>
+          <tr><td>field</td><td><span class="type-tag">string</span></td><td>使用的字段维度</td></tr>
+          <tr><td>entries</td><td><span class="type-tag">Array&lt;{kanji,romaji,hiragana,field}&gt;</span></td><td>名字条目数组</td></tr>
+        </table>
+        <div class="resp-example"><pre>{
+  "ok": true,
+  "data": {
+    "batch": "2026-07-29_1025",
+    "field": "kanji",
+    "entries": [
+      { "kanji": "小川梨恵", "romaji": "Rie Ogawa", "hiragana": "りお おがわ", "field": "小川梨恵" },
+      { "kanji": "桜井公美子", "romaji": "Kumiko Sakurai", "hiragana": "くみこ さくらい", "field": "桜井公美子" }
+    ]
+  }
+}</pre></div>
+      </div>
+    </div>
+
+    <!-- POST /api/fetch -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method post">POST</span>
+        <span class="ep-path">/api/fetch</span>
+        <span class="ep-summary">抓取日文名并存入新批次</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">从 namechef.co 抓取一批日文名并保存到新的数据批次。支持三种模式：<br/>
+        ① <strong>直接 HTML</strong> — 传入完整页面 HTML（跳过网络请求）；<br/>
+        ② <strong>Cookie 模式</strong> — 传入 cf_clearance cookie 进行 fetch；<br/>
+        ③ <strong>全自动模式</strong> — 无 cookie 时自动弹出隐藏窗口通过 Cloudflare 质询。<br/><br/>
+        操作完成后会自动通知渲染进程刷新界面。</div>
+        <div class="sub-title">Request Body</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>gender</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>性别筛选：G(女名) / B(男名) / U(中性)，默认 G</td></tr>
+          <tr><td>popularity</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>名字风格：popular / unique / trending，默认 popular</td></tr>
+          <tr><td>cookie</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>cf_clearance cookie 值（有此值时跳过自动质询）</td></tr>
+          <tr><td>html</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>完整页面 HTML（优先级最高，&gt;500 字符时直接解析）</td></tr>
+          <tr><td>url</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>目标 URL（全自动模式使用，默认 namechef 日文名生成器）</td></tr>
+        </table>
+        <div class="sub-title">Response Fields</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>count</td><td><span class="type-tag">number</span></td><td>抓取到的名字数量</td></tr>
+          <tr><td>batch</td><td><span class="type-tag">string | null</span></td><td>新建的批次目录名</td></tr>
+          <tr><td>entries</td><td><span class="type-tag">Array&lt;Object&gt;</span></td><td>名字条目详细数据（kanji/romaji/hiragana/raw 等）</td></tr>
+        </table>
+        <div class="resp-example"><pre>// Request
+POST /api/fetch
+Content-Type: application/json
+{ "gender": "G", "popularity": "popular" }
+
+// Response
+{
+  "ok": true,
+  "data": {
+    "count": 21,
+    "batch": "2026-07-30_0930",
+    "entries": [
+      { "kanji": "小川梨恵", "romaji": "Rie Ogawa", "hiragana": "りお おがわ", "raw": "小川梨恵" },
+      ...
+    ]
+  }
+}</pre></div>
+        <div class="error-note">
+          <strong>Error:</strong> Cloudflare 质询超时 → <code>{ ok:false, error:"Cloudflare 质询未通过（超时）..." }</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST /api/import -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method post">POST</span>
+        <span class="ep-path">/api/import</span>
+        <span class="ep-summary">一键导入到 IME 字典</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">将指定批次的名称按绑定方式写入微软拼音自定义短语字典（三层格式同步）。
+        从持久化的 bindings.json 映射手动绑定编码。操作完成后通知渲染进程刷新界面。</div>
+        <div class="sub-title">Request Body</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>batch</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>目标批次名（默认最新批次）</td></tr>
+          <tr><td>count</td><td><span class="type-tag">integer</span></td><td>No<span class="optional"></span></td><td>导入数量（默认 10，受绑定策略限位器钳制）</td></tr>
+          <tr><td>binding</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>绑定策略：manual / manualGlobal / qwerty / qwerFlow（默认 manual）</td></tr>
+          <tr><td>orderMode</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>候选位置模式：fixed / auto（默认 fixed）</td></tr>
+          <tr><td>orderPos</td><td><span class="type-tag">integer</span></td><td>No<span class="optional"></span></td><td>固定模式的候选位置值（默认 1）</td></tr>
+          <tr><td>phraseField</td><td><span class="type-tag">string</span></td><td>No<span class="optional"></span></td><td>短语字段：kanji / romaji / hiragana（默认 kanji）</td></tr>
+          <tr><td>aliases</td><td><span class="type-tag">Object</span></td><td>No<span class="optional"></span></td><td>别名映射（行号 → 编码数组）</td></tr>
+        </table>
+        <div class="sub-title">Binding Limits (BINDING_LIMITS)</div>
+        <table>
+          <tr><th>Strategy</th><th>Max Count</th><th>Description</th></tr>
+          <tr><td>manual</td><td>9999</td><td>手动模式无限制</td></tr>
+          <tr><td>manualGlobal</td><td>9999</td><td>手动全局模式无限制</td></tr>
+          <tr><td>qwerty</td><td>24</td><td>英文键位顺序（qwertyuiopasdfghjklzxcvb）</td></tr>
+          <tr><td>qwerFlow</td><td>12</td><td>英文键位流转顺序（qwerasdfzxcv）</td></tr>
+        </table>
+        <div class="sub-title">Response Fields</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>count</td><td><span class="type-tag">number</span></td><td>实际导入的记录数</td></tr>
+          <tr><td>batch</td><td><span class="type-tag">string</span></td><td>操作的批次名</td></tr>
+          <tr><td>target</td><td><span class="type-tag">string</span></td><td>写入的目标文件路径</td></tr>
+          <tr><td>reloaded</td><td><span class="type-tag">Object</span></td><td>IME 重载状态（含 killedChsIME/method）</td></tr>
+          <tr><td>backupPath</td><td><span class="type-tag">string</span></td><td>备份文件路径（用于撤回）</td></tr>
+        </table>
+        <div class="resp-example"><pre>// Request
+POST /api/import
+Content-Type: application/json
+{ "batch": "2026-07-29_1025", "count": 10, "binding": "qwerty", "phraseField": "kanji" }
+
+// Response
+{
+  "ok": true,
+  "data": {
+    "count": 10,
+    "batch": "2026-07-29_1025",
+    "target": "C:\\...\\ChsPinyinEUDPv1.lex",
+    "reloaded": { "killedChsIME": true, "method": "regsvr32" },
+    "backupPath": "C:\\...\\backup\\..."
+  }
+}</pre></div>
+        <div class="error-note">
+          <strong>Error:</strong> 无可用批次 → <code>{ ok:false, error:"没有可用的数据批次" }</code><br/>
+          批次无数据 → <code>{ ok:false, error:"批次无数据" }</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST /api/clear -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method post">POST</span>
+        <span class="ep-path">/api/clear</span>
+        <span class="ep-summary">清空所有 IME 自定义短语</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">清空微软拼音词库中的全部自定义短语（三层格式同步清除），保留备份用于撤回。
+        无需请求体。操作完成后通知渲染进程刷新界面。</div>
+        <div class="sub-title">Response Fields</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+          <tr><td>originalCount</td><td><span class="type-tag">number</span></td><td>清除前的原始短语总数</td></tr>
+          <tr><td>target</td><td><span class="type-tag">string</span></td><td>清空的目标文件路径</td></tr>
+          <tr><td>reloaded</td><td><span class="type-tag">Object</span></td><td>IME 重载状态</td></tr>
+          <tr><td>backupPath</td><td><span class="type-tag">string</span></td><td>备份文件路径（用于撤回）</td></tr>
+        </table>
+        <div class="resp-example"><pre>{
+  "ok": true,
+  "data": {
+    "originalCount": 24,
+    "target": "C:\\...\\ChsPinyinEUDPv1.lex",
+    "reloaded": { "killedChsIME": true, "method": "regsvr32" },
+    "backupPath": "C:\\...\\backup\\clear_1690680000"
+  }
+}</pre></div>
+      </div>
+    </div>
+
+    <!-- POST /api/phrase -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method post">POST</span>
+        <span class="ep-path">/api/phrase</span>
+        <span class="ep-summary">导入单条自定义短语</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">向 IME 字典添加单条自定义短语（三层格式同步写入：EUDPv1.lex + UDL.dat + ChsUserPhrase.dat）。
+        若相同 code+word 的短语已存在则合并去重不重复添加。</div>
+        <div class="sub-title">Request Body</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>code</td><td><span class="type-tag">string</span></td><td>Yes<span class="required">*</span></td><td>触发码（拼音编码，如 &quot;sakura&quot;、&quot;q&quot;）</td></tr>
+          <tr><td>word</td><td><span class="type-tag">string</span></td><td>Yes<span class="required">*</span></td><td>短语文本（如 &quot;桜&quot;、&quot;田中&quot;）</td></tr>
+          <tr><td>order</td><td><span class="type-tag">integer</span></td><td>No<span class="optional"></span></td><td>候选位置（默认 1）</td></tr>
+        </table>
+        <div class="resp-example"><pre>// Request
+POST /api/phrase
+Content-Type: application/json
+{ "code": "sakura", "word": "桜", "order": 1 }
+
+// Response
+{
+  "ok": true,
+  "data": {
+    "added": { "code": "sakura", "word": "桜", "order": 1 },
+    // ... 其他 ImportService 返回字段
+  }
+}</pre></div>
+        <div class="error-note">
+          <strong>Error:</strong> code 或 word 为空 → <code>{ ok:false, error:"code 和 word 均不能为空" }</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST /api/phrase/delete & DELETE /api/phrase -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method post">POST</span>
+        <span class="method delete" style="margin-left:4px">DELETE</span>
+        <span class="ep-path">/api/phrase/delete 或 DELETE /api/phrase</span>
+        <span class="ep-summary">删除单条自定义短语</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">从 IME 字典中删除指定的单条自定义短语（三层格式同步删除）。
+        支持 POST /api/phrase/delete 和 DELETE /api/phrase 两种调用方式。</div>
+        <div class="sub-title">Request Body</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>code</td><td><span class="type-tag">string</span></td><td>Yes<span class="required">*</span></td><td>要删除的触发码</td></tr>
+          <tr><td>word</td><td><span class="type-tag">string</span></td><td>Yes<span class="required">*</span></td><td>要删除的短语文本</td></tr>
+        </table>
+        <div class="resp-example"><pre>// Request (POST)
+POST /api/phrase/delete
+Content-Type: application/json
+{ "code": "sakura", "word": "桜" }
+
+// or (DELETE)
+DELETE /api/phrase
+Content-Type: application/json
+{ "code": "sakura", "word": "桜" }
+
+// Response
+{ "ok": true, "data": { /* 删除结果详情 */ } }</pre></div>
+      </div>
+    </div>
+
+    <!-- POST /api/undo -->
+    <div class="endpoint">
+      <div class="ep-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="method post">POST</span>
+        <span class="ep-path">/api/undo</span>
+        <span class="ep-summary">撤回上一次操作</span>
+        <span class="ep-arrow">▸</span>
+      </div>
+      <div class="ep-body">
+        <div class="desc">撤回上一次的一键导入或一键清除操作，恢复词库备份。</div>
+        <div class="sub-title">Request Body</div>
+        <table>
+          <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+          <tr><td>backups</td><td><span class="type-tag">Object</span></td><td>No<span class="optional"></span></td><td>备份信息（通常由上一次 import/clear 操作返回，内部传递即可）</td></tr>
+        </table>
+        <div class="resp-example"><pre>// Request
+POST /api/undo
+Content-Type: application/json
+{}
+
+// Response
+{
+  "ok": true,
+  "data": { "target": "C:\\...\\ChsPinyinEUDPv1.lex", "reloaded": { "killedChsIME": true } }
+}</pre></div>
+        <div class="error-note">
+          <strong>Error:</strong> 无可撤回的操作 → <code>{ ok:false, error:"无可撤回的操作" }</code>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.section -->
+
+  <!-- Quick examples -->
+  <div class="section">
+    <div class="section-title">Quick Examples / 快速示例</div>
+    <div class="desc">以下示例使用 <code>curl</code>（需替换端口号）：</div>
+    <div class="resp-example"><pre># 1. 健康检查
+curl http://127.0.0.1:18765/api/health
+
+# 2. 获取所有批次
+curl http://127.0.0.1:18765/api/batches
+
+# 3. 抓取日文名（全自动过 CF）
+curl -X POST http://127.0.0.1:18765/api/fetch \
+  -H "Content-Type: application/json" \
+  -d '{"gender":"G","popularity":"popular"}'
+
+# 4. 导入前 10 条（QWERTY 绑定）
+curl -X POST http://127.0.0.1:18765/api/import \
+  -H "Content-Type: application/json" \
+  -d '{"batch":"2026-07-29_1025","count":10,"binding":"qwerty"}'
+
+# 5. 添加单条短语
+curl -X POST http://127.0.0.1:18765/api/phrase \
+  -H "Content-Type: application/json" \
+  -d '{"code":"test","word":"テスト","order":1}'
+
+# 6. 删除单条短语
+curl -X POST http://127.0.0.1:18765/api/phrase/delete \
+  -H "Content-Type: application/json" \
+  -d '{"code":"test","word":"テスト"}'
+
+# 7. 清空所有短语
+curl -X POST http://127.0.0.1:18765/api/clear
+
+# 8. 撤回
+curl -X POST http://127.0.0.1:18765/api/undo \
+  -H "Content-Type: application/json" -d '{}'</pre></div>
+  </div>
+
+  <!-- Config reference -->
+  <div class="section">
+    <div class="section-title">Configuration / 配置项</div>
+    <div class="desc">在 <code>config.yaml</code> 中控制 API 行为：</div>
+    <table>
+      <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+      <tr><td>apiEnabled</td><td><span class="type-tag">boolean</span></td><td>true</td><td>是否启动本地 HTTP API 服务</td></tr>
+      <tr><td>apiPort</td><td><span class="type-tag">integer</span></td><td>18765</td><td>API 监听端口</td></tr>
+    </table>
+  </div>
+
+  <footer>
+    <p>japanese-ime-tool Local HTTP API Documentation &mdash; Generated for developers</p>
+    <p style="margin-top:4px;color:var(--text2)">Auto-generated from JSDoc comments in src/api/server.js</p>
+  </footer>
+
+</div><!-- /.container -->
+
+<script>
+// Auto-open first endpoint on load
+document.addEventListener('DOMContentLoaded', () => {
+  // Keep first one open, close others
+  const eps = document.querySelectorAll('.endpoint');
+  eps.forEach((ep, i) => { if (i > 0) ep.classList.remove('open'); });
+});
+</script>
+</body>
+</html>

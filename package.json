@@ -10,7 +10,7 @@
     "obfuscate": "node scripts/obfuscate.mjs",
     "pack": "npm run obfuscate && electron-builder --win --dir",
     "dist": "npm run obfuscate && electron-builder --win",
-    "test": "node test/dat-roundtrip.mjs && node test/binding.test.mjs && node test/parser.test.mjs && node test/configIntegrity.test.mjs && node test/langRecovery.test.mjs"
+    "test": "node test/dat-roundtrip.mjs && node test/binding.test.mjs && node test/parser.test.mjs && node test/configIntegrity.test.mjs && node test/langRecovery.test.mjs && node test/shortcuts.test.mjs && node test/batchDelete.test.mjs && node test/phraseExporters.test.mjs && node test/apiServer.test.mjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0"
@@ -23,6 +23,7 @@
   "build": {
     "appId": "com.cocosoys.japaneseimetool",
     "productName": "日文IME导入工具",
+    "icon": "assets/icon.ico",
     "directories": {
       "app": "build/app",
       "output": "release"
@@ -37,7 +38,8 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,

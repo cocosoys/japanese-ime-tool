@@ -99,6 +99,38 @@ export class MspyUdlExporter extends PhraseExporter {
     return entries;
   }
 
+  /** 从 60 字节原始条目中提取触发码（简码，位于 +4~+6，遇 0 终止） */
+  _codeFromRaw(raw) {
+    let code = '';
+    for (let i = 4; i < 7 && i < raw.length; i++) {
+      const c = raw[i];
+      if (c === 0) break;
+      code += String.fromCharCode(c);
+    }
+    return code;
+  }
+
+  /**
+   * 解析现有 UDL 文件并返回 {code, word, raw} 数组（公开方法，供单条短语增删使用）。
+   * @param {string} filePath
+   * @returns {Promise<Array<{code:string, word:string, raw:Buffer}>>}
+   */
+  async parseEntriesWithCode(filePath) {
+    const buf = await this._readExisting(filePath);
+    if (!buf) return [];
+    return this._parseEntries(buf).map((e) => ({ ...e, code: this._codeFromRaw(e.raw) }));
+  }
+
+  /** 由一组原始 60 字节条目构建完整 UDL 文件 Buffer（merge:false 语义，用于删除场景） */
+  buildFromRaws(raws) {
+    return this._buildUdl(raws);
+  }
+
+  /** 读取现有文件并合并（保留用户已有短语），返回完整 UDL Buffer；供单条短语新增使用 */
+  async exportMerge(records, filePath) {
+    return this.export(records, { filePath });
+  }
+
   /** 将 {code, word} 记录转为 UDL 60 字节条目（code/word 已做 NFC 规范化） */
   _makeEntry(record, reserved, normalizedCode, normalizedWord) {
     const word = normalizedWord || (record.word || '').normalize('NFC');

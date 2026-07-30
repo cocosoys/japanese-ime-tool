@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, clipboard, nativeTheme } from 'electron';
+import { app, BrowserWindow, ipcMain, clipboard, nativeTheme, shell, Tray, Menu } from 'electron';
 import path from 'path';
 import { promises as fsp, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -8,18 +8,25 @@ import { NameEntry } from './src/entities/NameEntry.js';
 import { ImportConfig } from './src/entities/ImportConfig.js';
 import { ConfigStore } from './src/store/configStore.js';
 import { BindingsStore } from './src/store/bindingsStore.js';
+import { ShortcutsStore } from './src/store/shortcutsStore.js';
 import { Logger } from './src/store/logger.js';
 import { detectConfigIssues, isolateIssues } from './src/store/configIntegrity.js';
 import { BUILTIN_CODES, BUILTIN_LANGS } from './src/store/builtinLang.js';
 import { getLangDir, ensureLangFiles, sanitizeLangCode, LOCALE_RE, isValidLangFile } from './src/store/langPaths.js';
 import { BINDING_LIMITS } from './src/implementations/binding/BindingStrategyFactory.js';
+import { createApiServer } from './src/api/server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const collection = new NameCollectionService();
 const importer = new ImportService();
 const configStore = new ConfigStore();
 const bindingsStore = new BindingsStore();
+const shortcutsStore = new ShortcutsStore();
 const logger = new Logger();
+
+let mainWindow = null;       // 主窗口引用（用于 API 操作后通知渲染进程刷新）
+let apiServer = null;        // 本地 HTTP API 服务实例
+let tray = null;             // 系统托盘图标（隐藏窗口时显示）
 
 /** 同步读取 config.yaml 中的 pinned 属性（窗口创建前需要知道置顶状态） */
 function readPinnedSync() {
@@ -49,12 +56,14 @@ function createWindow(initialPinned = false) {
     transparent: true,        // 透明背景（配合 CSS 圆角卡片）
     resizable: true,
     hasShadow: true,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  mainWindow = win;
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
 
@@ -62,6 +71,28 @@ app.whenReady().then(async () => {
   // 生产模式首次运行：把随包语言包复制到可写目录（userData/lang），作为运行期基础
   try { await ensureLangFiles(); } catch { /* 不影响启动 */ }
   createWindow(readPinnedSync());
+
+  // 启动本地 HTTP API 服务（默认 127.0.0.1:18765，可在 config.yaml 关闭/改端口）
+  try {
+    const cfg = await configStore.load();
+    if (cfg.apiEnabled) {
+      apiServer = createApiServer({
+        collection,
+        importer,
+        bindingsStore,
+        runAutoCf,
+        notify: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('api-refresh');
+        },
+      });
+      const info = await apiServer.start(Number(cfg.apiPort) || 18765);
+      logger.info(`本地 HTTP API 已启动：${info.url}`);
+    } else {
+      logger.info('本地 HTTP API 未启用（config.yaml apiEnabled=false）');
+    }
+  } catch (e) {
+    logger.error(`本地 HTTP API 启动失败：${e.message}`);
+  }
 });
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow(readPinnedSync());
@@ -84,7 +115,8 @@ async function waitForCookie(session, name, timeoutMs) {
 
 // 用隐藏 BrowserWindow（真实 Chromium）访问目标页，自动通过 JS 质询并取回 cf_clearance。
 // 若 20 秒内未通过（可能是需手动点击的 Turnstile），把窗口弹出来让用户点一下，再等 60 秒。
-ipcMain.handle('auto-cf', async (_e, opts = {}) => {
+// 抽取为独立函数，供 IPC（UI 抓取）与本地 HTTP API（/api/fetch 无 cookie 时）共用。
+async function runAutoCf(opts = {}) {
   const target = opts.url ||
     'https://www.namechef.co/cn/name-generator/japanese/?gender=G&popularity%5B%5D=popular';
 
@@ -135,7 +167,9 @@ ipcMain.handle('auto-cf', async (_e, opts = {}) => {
   } finally {
     if (!cfWin.isDestroyed()) cfWin.destroy();
   }
-});
+}
+
+ipcMain.handle('auto-cf', (_e, opts) => runAutoCf(opts));
 
 // 直接用已拿到的 HTML 解析（跳过网络请求），复用服务层的 parser + store。
 // 完整流程：保存 HTML → 解析名字 → 保存 JSON → 返回结果
@@ -297,6 +331,28 @@ ipcMain.handle('bindings-save-global', async (_e, { rows } = {}) => {
   return all;
 });
 
+// 快捷键配置读写（./data/shortcuts.json，含组合键与启用/禁用状态，持久化保存）
+ipcMain.handle('shortcuts-load', () => shortcutsStore.load());
+ipcMain.handle('shortcuts-save', async (_e, partial) => {
+  const merged = await shortcutsStore.save(partial || {});
+  logger.info(`快捷键配置已保存`);
+  return merged;
+});
+
+// 删除数据批次：删除批次目录 + 级联删除该批次的关联绑定（bindings.json 中对应键）
+ipcMain.handle('batch-delete', async (_e, { batch } = {}) => {
+  if (!batch) return { ok: false, error: 'no batch' };
+  try {
+    await bindingsStore.saveBatch(batch, {});      // 级联：移除该批次的手动绑定
+    await collection.store.deleteBatch(batch);     // 删除批次数据目录
+    logger.info(`已删除批次 ${batch}（含关联绑定）`);
+    return { ok: true };
+  } catch (e) {
+    logger.error(`删除批次失败：${e.message}`);
+    return { ok: false, error: e.message };
+  }
+});
+
 // ─── i18n 语言包（./data/lang/<code>.json） ───
 // 可写目录由 langPaths 解析（开发 cwd/data/lang；生产 userData/lang）。
 // 加载策略：文件异常时，zh-CN/en 从代码中内置表复制一份到本地并重载；其他语言不采取任何措施。
@@ -375,5 +431,82 @@ ipcMain.handle('copy-text', (_e, { text } = {}) => {
   return true;
 });
 
+// 本地 HTTP API 状态查询（供设置面板展示端口与启用情况）
+ipcMain.handle('api-status', () => {
+  const port = apiServer ? (apiServer.server.address()?.port) : null;
+  return { enabled: !!apiServer, url: apiServer ? apiServer.address() : null, port };
+});
+
+// 本地 HTTP API 启停切换（点击设置面板「已启用/已停止」文字触发）
+ipcMain.handle('api-toggle', async () => {
+  try {
+    let enabled;
+    let startedUrl = null;
+    let startedPort = null;
+    if (apiServer) {
+      // 停止服务
+      await apiServer.stop();
+      apiServer = null;
+      enabled = false;
+    } else {
+      // 启动服务
+      const cfg = await configStore.load();
+      apiServer = createApiServer({
+        collection,
+        importer,
+        bindingsStore,
+        runAutoCf,
+        notify: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('api-refresh');
+        },
+      });
+      const info = await apiServer.start(Number(cfg.apiPort) || 18765);
+      enabled = true;
+      startedUrl = info.url;
+      startedPort = info.port;
+    }
+    // 持久化 apiEnabled 到 config.yaml（下次启动据此自动恢复启停状态）
+    await configStore.save({ apiEnabled: enabled });
+    return enabled
+      ? { enabled: true, url: startedUrl, port: startedPort }
+      : { enabled: false };
+  } catch (e) {
+    return { enabled: !!apiServer, error: e.message };
+  }
+});
+
+// 用系统默认程序打开外部地址（如本地 API 文档 http://127.0.0.1:18765/api-docs.html）
+ipcMain.handle('open-external', (_e, { path } = {}) => {
+  if (!path) return false;
+  shell.openExternal(String(path));
+  return true;
+});
+
 ipcMain.on('close', () => BrowserWindow.getFocusedWindow()?.close());
-ipcMain.on('minimize', () => BrowserWindow.getFocusedWindow()?.minimize());
+
+/**
+ * 获取或创建系统托盘图标。
+ * 托盘图标用于「隐藏图标」功能：窗口隐藏后用户可通过托盘恢复。
+ */
+function getOrCreateTray() {
+  if (tray) return tray;
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  tray = new Tray(iconPath);
+  tray.setToolTip('Japanese Names · IME Phrases');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '显示窗口', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+    { type: 'separator' },
+    { label: '退出', click: () => app.quit() }
+  ]));
+  // 单击托盘图标也恢复窗口
+  tray.on('click', () => { mainWindow?.show(); mainWindow?.focus(); });
+  return tray;
+}
+
+/** 「隐藏图标」：隐藏主窗口 + 显示系统托盘（可从托盘恢复） */
+ipcMain.on('minimize', () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (!win) return;
+  getOrCreateTray();
+  win.hide();
+});

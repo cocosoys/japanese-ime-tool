@@ -19,6 +19,8 @@ const state = {
   bindingLimits: { manual: 9999, manualGlobal: 9999, qwerty: 24, qwerFlow: 12 }, // 各绑定方式导入数量限位器（由 IPC 覆盖）
   batches: [],                 // 全部批次目录名
   batchUsage: {},              // { [batch]: { used, total } } 按当前短语字段统计的使用情况
+  shortcuts: null,             // 快捷键配置：{ [action]: { combo, enabled } }（null=未加载，回退默认）
+  recording: null,             // 正在录制快捷键的动作名（null=非录制态）
 };
 
 // ─── i18n 国际化（语言包位于 ./data/lang/<code>.json，由主进程读取） ───
@@ -43,6 +45,7 @@ async function loadLang(lang) {
     state.lang = lang;
   } catch { I18N = {}; }
   applyI18n();
+  renderShortcuts();   // 语言切换后刷新快捷键标签/描述
 }
 
 /** 用 lang-list 动态填充语言下拉，选项显示各语言包的 language 属性（支持用户新增的其他语言） */
@@ -66,6 +69,7 @@ function applyI18n() {
   $$('[data-i18n-tip]').forEach((n) => { n.dataset.tip = t(n.dataset.i18nTip); });
   $$('[data-i18n-ph]').forEach((n) => { n.placeholder = t(n.dataset.i18nPh); });
   document.title = t('app.title');
+  syncOrderFixedLabel(); // data-i18n 会把「固定(=1)」写回，需按当前数值重新同步
   // 动态区域重绘（列表、统计卡）
   renderList(); renderStats();
 }
@@ -186,6 +190,15 @@ function updateOrderValueVisibility() {
   const input = $('#orderValue');
   if (sel === 'fixed') input.classList.add('show');
   else input.classList.remove('show');
+  syncOrderFixedLabel();
+}
+
+/** 「固定(=1)」选项文字随右侧数值框同步为「固定(=N)」（翻译文案中的 1 替换为当前值） */
+function syncOrderFixedLabel() {
+  const opt = $('#orderMode') && $('#orderMode').querySelector('option[value="fixed"]');
+  if (!opt) return;
+  const n = Math.max(1, parseInt($('#orderValue').value, 10) || 1);
+  opt.textContent = t('order.fixed').replace('1', String(n));
 }
 
 let saveTimer = null;
@@ -316,6 +329,11 @@ function renderBatchList() {
         $('#batch-label').textContent = b;
         renderBatchList();
       }
+    });
+    // 右击列表项 → 弹出上下文菜单（删除批次）
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showBatchCtxMenu(e.clientX, e.clientY, b);
     });
     list.appendChild(item);
   });
@@ -495,9 +513,12 @@ function calcFieldStats(field) {
 /**
  * 渲染三张仪表卡（汉字 / 罗马音 / 平假名）。
  * 每张卡片显示：大数字 = 未使用数 | 百分比 | 进度条 | 底部明细
+ * 无数据批次时显示占位符「—」
  */
 function renderStats() {
   const fields = ['kanji', 'romaji', 'hiragana'];
+  // 无批次选中 / 无任何批次 / 无数据 → 全部显示占位符
+  const isEmpty = !state.batch || !state.batches.length || (!state.entries || state.entries.length === 0);
   for (const field of fields) {
     const card = $(`.stat-card[data-field="${field}"]`);
     if (!card) continue;
@@ -508,6 +529,17 @@ function renderStats() {
     const barFill = card.querySelector('.stat-card-bar-fill');
     const footerEl = card.querySelector('.stat-card-footer');
 
+    if (isEmpty) {
+      valueEl.textContent = '—';
+      pctEl.textContent = '—%';
+      valueEl.style.color = '#868e96';
+      pctEl.style.color = '#868e96';
+      barFill.className = 'stat-card-bar-fill level-mid';
+      barFill.style.width = '0%';
+      footerEl.textContent = t('stat.empty', { unused: '—', used: '—', total: '—' });
+      continue;
+    }
+
     const { total, used, unused } = calcFieldStats(field);
 
     const rate = total > 0 ? unused / total : 1;
@@ -515,7 +547,7 @@ function renderStats() {
 
     // 大数字 + 百分比
     valueEl.textContent = unused;
-    pctEl.textContent = `${unusedPct}%`;
+    pctEl.textContent = `${unusedPct}%`;    
 
     // 颜色随阈值变化
     if (unusedPct >= 50) {
@@ -1070,6 +1102,56 @@ function toggleSettings(open) {
   const panel = $('#settings-panel');
   const next = open != null ? open : !panel.classList.contains('open');
   panel.classList.toggle('open', next);
+  if (next) refreshApiStatus();
+}
+
+/**
+ * 刷新设置面板中的本地 HTTP API 状态（端口 / 启用情况）。
+ * API 已启用时，在下方显示 API 文档地址（{apiUrl}/api-docs.html）并可供点击在浏览器中打开；
+ * API 禁用时隐藏该地址行。
+ */
+async function refreshApiStatus() {
+  const elStatus = $('#api-status');
+  const docRow = $('#api-doc-row');
+  const docLink = $('#api-doc-link');
+  if (!elStatus) return;
+  try {
+    const s = await window.api.apiStatus();
+    const enabled = !!(s && s.enabled);
+    elStatus.textContent = enabled ? t('set.api.on', { url: s.url || '' }) : t('set.api.off');
+    elStatus.classList.toggle('on', enabled);
+    // 文档地址行：启用时显示并拼接真实地址，禁用时隐藏
+    if (enabled && docRow && docLink) {
+      const docUrl = s.url ? `${s.url}/api-docs.html` : '';
+      docRow.classList.remove('hidden');
+      docLink.textContent = docUrl;
+      docLink.href = docUrl;
+      docLink.dataset.url = docUrl;
+    } else if (docRow) {
+      docRow.classList.add('hidden');
+    }
+  } catch {
+    elStatus.textContent = '—';
+    if (docRow) docRow.classList.add('hidden');
+  }
+}
+
+/** 点击设置面板「本地API」状态文字 → 切换启停 */
+async function toggleApiServer() {
+  const elStatus = $('#api-status');
+  if (!elStatus) return;
+  elStatus.style.pointerEvents = 'none';
+  try {
+    const res = await window.api.apiToggle();
+    if (res && res.error) {
+      setStatusBar(t('msg.apiToggleFail', { err: res.error }), 'err');
+    }
+    await refreshApiStatus();
+  } catch (e) {
+    setStatusBar(t('msg.apiToggleFail', { err: e.message }), 'err');
+  } finally {
+    elStatus.style.pointerEvents = '';
+  }
 }
 
 // 点击面板外部时自动收起
@@ -1078,6 +1160,16 @@ document.addEventListener('mousedown', (e) => {
   if (!panel.classList.contains('open')) return;
   if (panel.contains(e.target) || e.target.closest('#btn-settings')) return;
   toggleSettings(false);
+});
+
+// 点击「本地API」状态文字 → 切换启停
+$('#api-status')?.addEventListener('click', toggleApiServer);
+
+// 点击 API 文档地址 → 在系统默认浏览器中打开
+$('#api-doc-link')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  const url = e.currentTarget.dataset.url;
+  if (url) window.api.openExternal({ path: url }).catch(() => {});
 });
 
 // 语言切换（下拉由 lang-list 动态填充，选项文本即语言包的 language 属性）
@@ -1133,6 +1225,7 @@ async function refreshAll() {
   let cfg = null;
   try { cfg = await window.api.loadConfig(); } catch { /* 保持现状 */ }
   await populateLangSelect();
+  await loadShortcuts();   // 加载快捷键配置（含录制/禁用状态）
   if (cfg) {
     applyTheme(cfg.theme || 'system');
     await loadLang(cfg.lang || 'zh-CN');
@@ -1149,16 +1242,77 @@ async function refreshAll() {
   }
 }
 
+// ─── 关闭按钮：询问 / 直接关闭 / 最小化（可记忆选择） ───
+
+/**
+ * 处理关闭按钮点击：
+ * 1. 读取 config.yaml 的 closeBehavior
+ * 2. 'ask' → 弹出选择模态框
+ * 3. 'close' → 直接关闭应用
+ * 4. 'minimize' → 最小化窗口
+ */
+async function handleClose() {
+  try {
+    const cfg = await window.api.loadConfig();
+    const behavior = cfg && cfg.closeBehavior || 'ask';
+    if (behavior === 'close') { window.api.close(); return; }
+    if (behavior === 'minimize') { window.api.minimize(); return; }
+    // 'ask' → 显示模态框
+    showCloseModal();
+  } catch {
+    // 配置读取失败时默认直接关闭
+    window.api.close();
+  }
+}
+
+/** 显示关闭确认模态框 */
+function showCloseModal() {
+  const modal = $('#close-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  // 重置记住选项状态
+  const cb = $('#close-modal-remember');
+  if (cb) cb.checked = false;
+}
+
+/** 隐藏关闭模态框 */
+function hideCloseModal() {
+  const modal = $('#close-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/** 用户在模态框中选择操作 */
+async function onCloseChoice(action) {
+  const cb = $('#close-modal-remember');
+  if (cb && cb.checked) {
+    try {
+      await window.api.saveConfig({ closeBehavior: action });
+    } catch { /* 忽略保存失败 */ }
+  }
+  hideCloseModal();
+  if (action === 'close') {
+    window.api.close();
+  } else {
+    window.api.minimize();
+  }
+}
+
 // ─── 事件绑定 ───
 
 $('#btn-auto').addEventListener('click', autoFetch);
 $('#btn-import').addEventListener('click', doImport);
 $('#btn-clear').addEventListener('click', doClear);
 $('#btn-undo').addEventListener('click', doUndo);
-$('#btn-close').addEventListener('click', () => window.api.close());
+$('#btn-close').addEventListener('click', handleClose);
 $('#btn-min').addEventListener('click', () => window.api.minimize());
 $('#btn-settings').addEventListener('click', () => toggleSettings());
 $('#btn-refresh').addEventListener('click', refreshAll);
+
+// 关闭模态框按钮
+$('#close-modal-close')?.addEventListener('click', () => onCloseChoice('close'));
+$('#close-modal-minimize')?.addEventListener('click', () => onCloseChoice('minimize'));
+// 点击模态框背景层关闭
+$('#close-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) hideCloseModal(); });
 
 // 暴露动作接口：供外部脚本 / 开发工具以 api 方式触发
 // 「抓取 / 一键导入 / 一键清除 / 撤回 / 切换短语字段」效果（快捷键直接调用本地函数，不依赖此暴露）
@@ -1244,15 +1398,138 @@ function togglePhraseField() {
   setStatusBar(t('msg.fieldSwitched', { field: t('field.' + next) }), 'ok');
 }
 
-// 全局快捷键：Alt+X 抓取 / Alt+V 一键导入 / Alt+C 一键清除 / Alt+Z 撤回 / Alt+B 切换短语字段
+// ─── 快捷键：自定义组合键 + 启用/禁用（持久化到 data/shortcuts.json） ───
+// 5 个可触发动作（与 window.api.* 一一对应）；出厂默认 Alt+X/V/C/Z/B
+const SHORTCUT_ACTIONS = [
+  { key: 'capture', labelKey: 'fetch', fn: () => autoFetch() },
+  { key: 'doImport', labelKey: 'import', fn: () => doImport() },
+  { key: 'doClear', labelKey: 'clear', fn: () => doClear() },
+  { key: 'doUndo', labelKey: 'undo', fn: () => doUndo() },
+  { key: 'togglePhraseField', labelKey: 'toggleField', fn: () => togglePhraseField() },
+];
+
+function defaultShortcuts() {
+  return {
+    capture: { combo: 'Alt+X', enabled: true },
+    doImport: { combo: 'Alt+V', enabled: true },
+    doClear: { combo: 'Alt+C', enabled: true },
+    doUndo: { combo: 'Alt+Z', enabled: true },
+    togglePhraseField: { combo: 'Alt+B', enabled: true },
+  };
+}
+
+/** 从键盘事件规范化组合键字符串：修饰键(Ctrl/Alt/Shift/Meta)在前 + 主键，字母大写。
+ *  纯修饰键（无主键）返回 null，等待主键。 */
+function comboFromEvent(e) {
+  const mods = [];
+  if (e.ctrlKey) mods.push('Ctrl');
+  if (e.altKey) mods.push('Alt');
+  if (e.shiftKey) mods.push('Shift');
+  if (e.metaKey) mods.push('Meta');
+  let key = e.key;
+  if (key == null) return null;
+  if (key === ' ') key = 'Space';
+  // 仅按下修饰键本身（key 为 Control/Alt/Shift/Meta）→ 无主键，返回 null
+  if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return null;
+  if (key.length === 1) key = key.toUpperCase();
+  return [...mods, key].join('+');
+}
+
+/** 读取并缓存快捷键配置（缺失时回退默认） */
+async function loadShortcuts() {
+  try { state.shortcuts = (await window.api.shortcutsLoad()) || defaultShortcuts(); }
+  catch { state.shortcuts = defaultShortcuts(); }
+  renderShortcuts();
+}
+
+function persistShortcuts() {
+  window.api.shortcutsSave(state.shortcuts).catch(() => {});
+}
+
+/** 渲染设置面板中的快捷键列表：组合键 + 录制按钮；点击标签区域切换启用/禁用 */
+function renderShortcuts() {
+  const list = $('#shortcut-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const sc = state.shortcuts || defaultShortcuts();
+  SHORTCUT_ACTIONS.forEach(({ key, labelKey }) => {
+    const s = sc[key] || { combo: '', enabled: true };
+    const row = el('div', 'shortcut-item' + (s.enabled ? '' : ' disabled'));
+    row.dataset.tipCall = 'window.api.' + key + '()';
+    row.dataset.tip = t('act.' + labelKey + '.tip');
+    const left = el('div', 'shortcut-left');
+    // 点击左侧区域（标签+组合键）切换启用/禁用
+    left.style.cursor = 'pointer';
+    left.addEventListener('click', () => toggleShortcut(key));
+    left.appendChild(el('span', 'shortcut-label', t('act.' + labelKey)));
+    left.appendChild(el('kbd', 'shortcut-combo', s.combo || '—'));
+    const right = el('div', 'shortcut-right');
+    const rec = el('button', 'shortcut-rec' + (state.recording === key ? ' recording' : ''),
+      state.recording === key ? t('set.shortcut.editing') : t('set.shortcut.edit'));
+    rec.addEventListener('click', (ev) => { ev.stopPropagation(); startRecording(key); });
+    right.appendChild(rec);
+    row.append(left, right);
+    list.appendChild(row);
+  });
+}
+
+function startRecording(key) {
+  state.recording = key;
+  renderShortcuts();
+  setStatusBar(t('shortcut.recording'), 'warn');
+}
+
+function stopRecording() {
+  state.recording = null;
+  renderShortcuts();
+}
+
+function toggleShortcut(key) {
+  const sc = state.shortcuts || (state.shortcuts = defaultShortcuts());
+  sc[key] = sc[key] || { combo: '', enabled: true };
+  sc[key].enabled = !sc[key].enabled;
+  persistShortcuts();
+  renderShortcuts();
+}
+
+// 全局快捷键：按用户自定义组合键触发（最多 3 键），支持录制与禁用
 document.addEventListener('keydown', (e) => {
-  if (!e.altKey) return;
-  const k = (e.key || '').toLowerCase();
-  if (k === 'x') { e.preventDefault(); autoFetch(); }
-  else if (k === 'v') { e.preventDefault(); doImport(); }
-  else if (k === 'c') { e.preventDefault(); doClear(); }
-  else if (k === 'z') { e.preventDefault(); doUndo(); }
-  else if (k === 'b') { e.preventDefault(); togglePhraseField(); }
+  // 录制模式：捕获下一次组合键作为该动作的快捷键
+  if (state.recording) {
+    e.preventDefault();
+    if (e.key === 'Escape') { stopRecording(); setStatusBar(t('msg.cancelled')); return; }
+    const combo = comboFromEvent(e);
+    if (!combo) return;                       // 仅修饰键，等待主键
+    if (combo.split('+').length > 3) {        // 组合超过 3 个按键 → 不合法
+      stopRecording();
+      setStatusBar(t('shortcut.invalid'), 'err');
+      return;
+    }
+    const key = state.recording;
+    state.recording = null;
+    const sc = state.shortcuts || (state.shortcuts = defaultShortcuts());
+    sc[key] = { combo, enabled: true };
+    persistShortcuts();
+    renderShortcuts();
+    setStatusBar(t('shortcut.captured', { combo }), 'ok');
+    return;
+  }
+  // 正常触发模式
+  const combo = comboFromEvent(e);
+  if (!combo) return;
+  // 裸键（无修饰键）且焦点在输入框 → 不触发，避免劫持输入
+  const tag = (e.target && e.target.tagName) || '';
+  const hasMod = /Ctrl|Alt|Shift|Meta/.test(combo);
+  if (!hasMod && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')) return;
+  const sc = state.shortcuts || {};
+  for (const a of SHORTCUT_ACTIONS) {
+    const s = sc[a.key];
+    if (s && s.enabled && s.combo === combo) {
+      e.preventDefault();
+      a.fn();
+      return;
+    }
+  }
 });
 
 ['#gender', '#popularity', '#phraseField', '#binding', '#orderMode'].forEach((sel) => {
@@ -1260,7 +1537,7 @@ document.addEventListener('keydown', (e) => {
 });
 // 切换候选位置模式时同步显示/隐藏固定值输入框
 $('#orderMode').addEventListener('change', () => { updateOrderValueVisibility(); });
-$('#orderValue').addEventListener('input', persistConfig);
+$('#orderValue').addEventListener('input', () => { syncOrderFixedLabel(); persistConfig(); });
 $('#count').addEventListener('input', persistConfig);
 $('#count').addEventListener('change', () => { clampCount(); persistConfig(); });
 
@@ -1285,6 +1562,62 @@ $('#set-batch-clear').addEventListener('click', async () => {
   } catch (e) {
     setStatusBar(String(e.message || e), 'err');
   }
+});
+
+// ─── 批次右击上下文菜单：删除数据批次（级联删除关联绑定） ───
+function showBatchCtxMenu(x, y, batch) {
+  const m = $('#batch-ctx-menu');
+  if (!m) return;
+  m.dataset.batch = batch;
+  m.classList.remove('hidden');
+  const w = m.offsetWidth || 120;
+  const h = m.offsetHeight || 30;
+  m.style.left = Math.min(x, window.innerWidth - w - 4) + 'px';
+  m.style.top = Math.min(y, window.innerHeight - h - 4) + 'px';
+}
+
+function hideBatchCtxMenu() {
+  const m = $('#batch-ctx-menu');
+  if (m) m.classList.add('hidden');
+}
+
+// 点击菜单「删除批次」→ 二次确认 → 确认后才真正删除
+$('#batch-ctx-menu .ctx-del').addEventListener('click', async () => {
+  const m = $('#batch-ctx-menu');
+  const batch = m && m.dataset.batch;
+  hideBatchCtxMenu();
+  if (!batch) return;
+  const action = await showDialog({
+    title: t('dialog.deleteBatch.title'),
+    body: t('dialog.deleteBatch.body', { batch }),
+    buttons: [
+      { label: t('dialog.deleteBatch.confirm'), cls: 'dialog-btn-primary', value: 'confirm' },
+      { label: t('dialog.deleteBatch.cancel'), cls: 'dialog-btn-cancel', value: 'cancel' },
+    ],
+  });
+  if (action !== 'confirm') { setStatusBar(t('msg.cancelled')); return; }
+  try {
+    const res = await window.api.deleteBatch({ batch });
+    if (!res || !res.ok) throw new Error((res && res.error) || 'unknown');
+    delete state.batchBindings[batch];   // 内存中同步移除该批次绑定
+    // 若删除的是当前批次，自动切到其余批次之一（或清空）
+    await refreshBatches(state.batch === batch ? null : state.batch);
+    // 当所有数据批次都被删除、切换到无任何数据批次的状态时，需刷新页面以正确渲染空态
+    if (!state.batches.length) {
+      setStatusBar(t('msg.batchDeleted', { batch }), 'ok');
+      location.reload();
+      return;
+    }
+    setStatusBar(t('msg.batchDeleted', { batch }), 'ok');
+  } catch (err) {
+    setStatusBar(t('msg.batchDeleteFailed', { msg: String(err.message || err) }), 'err');
+  }
+});
+
+// 在菜单之外点击/按下 → 隐藏上下文菜单
+document.addEventListener('mousedown', (e) => {
+  const m = $('#batch-ctx-menu');
+  if (m && !m.classList.contains('hidden') && !m.contains(e.target)) hideBatchCtxMenu();
 });
 
 // ─── 新手引导提示气泡 ───
@@ -1351,6 +1684,11 @@ async function initApp() {
 
   // 先填充语言下拉，保证 applyConfigToUi 能正确选中当前语言
   await populateLangSelect();
+  // 加载快捷键配置（组合键 + 启用/禁用），供设置面板渲染与全局监听使用
+  try { await loadShortcuts(); } catch { state.shortcuts = defaultShortcuts(); }
+
+  // 注册：本地 HTTP API 操作后由主进程通知刷新界面
+  try { if (window.api.onApiRefresh) window.api.onApiRefresh(() => { refreshAll().catch(() => {}); }); } catch { /* 忽略 */ }
 
   // 主题与语言优先套用，保证首屏就是正确外观/文案
   try { if (cfg) applyConfigToUi(cfg); } catch { /* 默认值 */ }
@@ -1391,14 +1729,9 @@ async function initApp() {
     }
   } catch { /* fall through */ }
 
-  // 完全没有任何数据批次时，才尝试加载缓存数据作为兜底
+  // 完全没有任何数据批次时，不加载虚拟/缓存数据；仪表卡显示占位符「—」
   if (!state.batches.length) {
-    const data = await window.api.cached();
-    if (data && data.length) {
-      state.entries = data;
-      renderList(); renderStats();
-      setStatusBar(t('msg.cacheLoaded', { n: data.length }), 'ok');
-    }
+    renderList(); renderStats();
   }
   // 启动完成：此后出现的新提示才显现隐藏按钮（满足"启动默认隐藏"）
   hintRevealEnabled = true;

@@ -17,6 +17,9 @@ const DEFAULTS = {
   theme: 'system',        // 主题：light/dark/system（跟随系统）
   pinned: false,           // 固定窗口到最前面（置顶）：true 置顶 / false 取消（默认不置顶，由 config.yaml 决定）
   lastBatch: '',            // 上次打开的数据批次名（启动据此自动恢复；丢失/异常时清空加载）
+  apiEnabled: true,         // 本地 HTTP API 服务（127.0.0.1）是否启用
+  apiPort: 18765,           // 本地 HTTP API 监听端口
+  closeBehavior: 'ask',     // 关闭按钮行为：'ask'=询问 / 'close'=直接关闭 / 'minimize'=最小化
 };
 
 function toYaml(obj) {
@@ -35,6 +38,8 @@ function parseYaml(text) {
     const key = t.slice(0, idx).trim();
     let val = t.slice(idx + 1).trim();
     if (/^-?\d+$/.test(val)) val = parseInt(val, 10);
+    else if (val === 'true') val = true;
+    else if (val === 'false') val = false;
     out[key] = val;
   }
   return out;

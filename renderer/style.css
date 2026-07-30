@@ -88,19 +88,85 @@ button.undo-btn:hover:not(:disabled) { box-shadow: 0 3px 10px rgba(116,192,252,0
 .set-actions { flex-direction: column; align-items: stretch; gap: 6px; margin-bottom: 0; }
 .set-actions button { width: 100%; font-size: 11px; white-space: normal; line-height: 1.35; padding: 7px 10px; }
 
-/* 设置面板 — 快捷键列表（显示各动作的 Alt+* 组合） */
+/* 设置面板 — 本地 API 状态行 */
+.set-api { margin-top: 4px; }
+.set-api label { color: #8a98a5; }
+.api-status {
+  flex: 1; min-width: 0; font-size: 10px; color: #868e96;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  cursor: pointer; padding: 2px 4px; border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+.api-status:hover { background: rgba(0,0,0,0.05); }
+.api-status.on { color: #2b8a3e; }
+.api-status.on:hover { background: rgba(43,138,62,0.08); }
+
+/* 设置面板 — 本地 API 文档地址行（仅 API 启用时显示） */
+.set-api-doc { margin-top: 2px; }
+.set-api-doc label { color: #8a98a5; }
+.api-doc-link {
+  flex: 1; min-width: 0; font-size: 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  color: #4c6ef5; text-decoration: none; cursor: pointer;
+  padding: 2px 4px; border-radius: 4px; transition: background 0.12s, color 0.12s;
+}
+.api-doc-link:hover { background: rgba(76,110,245,0.1); text-decoration: underline; }
+.set-api-doc.hidden { display: none; }
+
+/* 设置面板 — 快捷键列表（组合键 + 录制；点击标签区域切换启用/禁用） */
 .set-shortcuts { align-items: flex-start; }
 .set-shortcuts > label { margin-top: 2px; }
-.shortcut-list { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.shortcut-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; }
-.shortcut-item span { color: #5b6770; }
-.shortcut-item kbd {
+.shortcut-list { flex: 1; display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.shortcut-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 11px; padding: 4px 6px; border-radius: 6px;
+  transition: opacity 0.15s, background 0.12s;
+}
+.shortcut-item.disabled { opacity: 0.45; }
+.shortcut-item.disabled .shortcut-combo { text-decoration: line-through; }
+/* 点击区域（标签+组合键）：可点击切换启用/禁用 */
+.shortcut-left {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  border-radius: 5px; padding: 2px 4px; margin: -2px -4px;
+  transition: background 0.12s;
+}
+.shortcut-left:hover { background: rgba(0,0,0,0.05); }
+.shortcut-item.disabled .shortcut-left { cursor: pointer; }
+.shortcut-label { color: #5b6770; white-space: nowrap; user-select: none; }
+.shortcut-combo {
   font-family: "SF Mono", Consolas, "Courier New", monospace;
-  font-size: 10px; line-height: 1;
+  font-size: 10px; line-height: 1; white-space: nowrap;
   background: #eef1f4; color: #3a4750;
   border: 1px solid #d3d9df; border-bottom-width: 2px;
   border-radius: 5px; padding: 3px 6px;
+  user-select: none;
 }
+.shortcut-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; margin-left: auto; }
+.shortcut-rec {
+  font-size: 10px; padding: 3px 7px; min-height: 22px; border-radius: 6px;
+  background: #eef1f4; color: #495057; border: 1px solid #d6dde3; cursor: pointer;
+  white-space: nowrap;
+}
+.shortcut-rec:hover { background: #e2e6ea; }
+.shortcut-rec.recording { background: #fff3bf; color: #854c00; border-color: #ffe066; }
+
+/* 批次右击上下文菜单（删除数据批次，含二次确认） */
+.ctx-menu {
+  position: fixed; z-index: 300; min-width: 120px;
+  background: #fff; border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,0.2);
+  padding: 4px; overflow: hidden;
+}
+.ctx-menu.hidden { display: none; }
+.ctx-item {
+  padding: 7px 12px; font-size: 12px; color: #495057; border-radius: 6px;
+  cursor: pointer; white-space: nowrap;
+}
+.ctx-item:hover { background: #f1f3f5; }
+.ctx-item.ctx-del { color: #c92a2a; }
+.ctx-item.ctx-del:hover { background: #fff0f0; }
 
 /* ══════════════════════════════════════
    数据统计面板 — 三张仪表卡
@@ -449,13 +515,47 @@ body.theme-dark .item input.code:disabled { background: #2b2f3a; color: #7c8794;
 body.theme-dark .item .code.global-code { background: #0b2545; color: #74c0fc; border-color: #1864ab; }
 body.theme-dark .empty { color: #5f6b7a; }
 
+/* ─── 批次行：性别/风格/抓取缩小后置于数据批次右侧 ─── */
+.batch-row { flex-wrap: nowrap; align-items: center; gap: 6px; }
+.batch-row .batch-select { flex: 1; min-width: 60px; }
+/* 缩小型控件（性别/风格/抓取），内容自适应、不撑开 */
+.mini {
+  width: auto; flex: none; font-size: 10px; line-height: 1.2;
+  height: 26px; min-height: 26px; padding: 2px 6px;
+}
+.mini.auto { width: auto; flex: none; padding: 2px 8px; }
+
 /* ─── 批次下拉（自定义，带每批次使用情况进度条） ─── */
 .batch-select { position: relative; flex: 1; min-width: 0; }
+/* 下拉宽度稳定（独立于批次框实际宽度），确保右侧进度条+数字正常渲染；展开时加长以完整显示批次名 */
+.batch-list { min-width: 280px; }
 .batch-btn {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px;
   text-align: left; background: #fff;
 }
 .batch-btn .caret { color: #868e96; font-size: 10px; flex-shrink: 0; }
+/* 批次名称标签：不换行、超出隐藏；悬停时文字向右逐渐展示完整名称 */
+#batch-label {
+  display: inline-block; max-width: 100px; min-width: 30px;
+  overflow: hidden; white-space: nowrap; text-overflow: clip;
+  vertical-align: middle;
+}
+/* #batch-label:hover { */
+/*   max-width: none; */
+/*   animation: batch-label-scroll 3s ease-in-out alternate infinite; */
+/* } */
+/* @keyframes batch-label-scroll { */
+/*   0% { transform: translateX(0); } */
+/*   100% { transform: translateX(-30%); } */
+/* } */
+#batch-label:hover {
+  max-width: none;
+  animation: batch-label-reveal 4s ease-out forwards;
+}
+@keyframes batch-label-reveal {
+  from { max-width: 100px; }
+  to { max-width: 300px; }
+}
 .batch-list {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60;
   background: #fff; border: 1px solid #d6dde3; border-radius: 8px;
@@ -488,6 +588,20 @@ body.theme-dark .empty { color: #5f6b7a; }
   text-align: left; background: #fff;
 }
 .binding-btn .caret { color: #868e96; font-size: 10px; flex-shrink: 0; }
+/* 绑定方式标签：不换行、超出隐藏；悬停时文字向右逐渐展示完整名称 */
+#binding-label {
+  display: inline-block; max-width: 80px; min-width: 20px;
+  overflow: hidden; white-space: nowrap; text-overflow: clip;
+  vertical-align: middle;
+}
+#binding-label:hover {
+  max-width: none;
+  animation: binding-label-reveal 4s ease-out forwards;
+}
+@keyframes binding-label-reveal {
+  from { max-width: 80px; }
+  to { max-width: 280px; }
+}
 .binding-list {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60;
   background: #fff; border: 1px solid #d6dde3; border-radius: 8px;
@@ -540,6 +654,24 @@ body.theme-dark .settings-panel {
   width: 260px;
 }
 body.theme-dark .set-row label { color: #7d8896; }
+body.theme-dark .api-status { color: #8a93a2; }
+body.theme-dark .api-status:hover { background: rgba(255,255,255,0.06); }
+body.theme-dark .api-status.on:hover { background: rgba(47,158,68,0.12); }
+body.theme-dark .api-doc-link { color: #748ffc; }
+body.theme-dark .api-doc-link:hover { background: rgba(116,143,252,0.14); }
+
+/* 暗色主题 — 快捷键行 + 批次上下文菜单 */
+body.theme-dark .shortcut-label { color: #9aa5b1; }
+body.theme-dark .shortcut-combo { background: #2b2f3a; color: #cfd6e4; border-color: #3a3f4b; }
+body.theme-dark .shortcut-rec { background: #2b2f3a; color: #cfd6e4; border-color: #3a3f4b; }
+body.theme-dark .shortcut-rec:hover { background: #363b48; }
+body.theme-dark .shortcut-rec.recording { background: #4d3f10; color: #ffe066; border-color: #6b5510; }
+body.theme-dark .shortcut-left:hover { background: rgba(255,255,255,0.06); }
+body.theme-dark .ctx-menu { background: #2b2f3a; border-color: #3a3f4b; box-shadow: 0 10px 28px rgba(0,0,0,0.5); }
+body.theme-dark .ctx-item { color: #cfd6e4; }
+body.theme-dark .ctx-item:hover { background: #363b48; }
+body.theme-dark .ctx-item.ctx-del { color: #ff8787; }
+body.theme-dark .ctx-item.ctx-del:hover { background: #3a1f1f; }
 
 /* ══════════════════════════════════════
    自定义确认弹窗（三按钮场景）
@@ -592,6 +724,63 @@ body.theme-dark .dialog-body { color: #cfd6e4; }
 body.theme-dark .dialog-btn-primary { background: linear-gradient(135deg,#ff758c,#ff5e79); }
 body.theme-dark .dialog-btn-secondary { background: #2b2f3a; color: #cfd6e4; }
 body.theme-dark .dialog-btn-cancel { background: transparent; color: #8a93a2; border-color: #3a3f4d; }
+
+/* ══════════════════════════════════════
+   关闭确认模态框（关闭 / 最小化 + 记住选择）
+   ══════════════════════════════════════ */
+.close-modal {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(0,0,0,0.45); display: flex;
+  align-items: center; justify-content: center;
+}
+.close-modal.hidden { display: none; }
+.close-modal-box {
+  width: 300px; max-width: 90vw;
+  background: #fff; border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  padding: 22px; display: flex; flex-direction: column; gap: 16px;
+}
+.close-modal-title {
+  font-size: 15px; font-weight: 700; color: #c2255c;
+  display: flex; align-items: center; gap: 6px;
+}
+.close-modal-body {
+  font-size: 12.5px; line-height: 1.6; color: #495057;
+}
+.close-modal-actions {
+  display: flex; gap: 10px; justify-content: center;
+}
+.close-modal-actions .btn-sm {
+  padding: 8px 18px; font-size: 12px; border-radius: 8px;
+  cursor: pointer; font-weight: 600; border: none; transition: all 0.15s;
+  flex: 1; text-align: center;
+}
+.btn-secondary { background: #eef1f4; color: #495057; }
+.btn-secondary:hover { background: #dbe0e5; }
+.btn-danger { background: linear-gradient(135deg,#ff758c,#e03131); color: #fff; }
+.btn-danger:hover { background: linear-gradient(135deg,#e03131,#c92a2a); }
+/* 勾选框 + 文字：独立渲染，文字紧贴勾选框右侧 */
+.close-modal-remember {
+  display: inline-flex; flex-direction: row; align-items: center;
+  gap: 10px;
+  font-size: 11px; color: #868e96; cursor: pointer;
+  user-select: none; margin-top: 6px;
+}
+.close-modal-remember input[type="checkbox"] {
+  cursor: pointer; accent-color: #ff758c; flex-shrink: 0; margin: 0; margin-left: 50px;
+}
+/* 文字独立渲染（label 元素），紧贴勾选框右侧 */
+.close-modal-remember-text {
+  white-space: nowrap; cursor: pointer; color: inherit; margin-left: -120px;
+}
+
+/* 关闭模态框暗色 */
+body.theme-dark .close-modal-box { background: #232733; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+body.theme-dark .close-modal-title { color: #ff8fab; }
+body.theme-dark .close-modal-body { color: #cfd6e4; }
+body.theme-dark .btn-secondary { background: #2b2f3a; color: #cfd6e4; }
+body.theme-dark .btn-danger { background: linear-gradient(135deg,#ff758c,#e03131); }
+body.theme-dark .close-modal-remember { color: #8a93a2; }
 
 /* 配置异常弹框：异常文件范围列表 */
 .config-error-list {

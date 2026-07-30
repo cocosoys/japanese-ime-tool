@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('api', {
   saveBindings: (payload) => ipcRenderer.invoke('bindings-save', payload),
   bindingLimits: () => ipcRenderer.invoke('binding-limits'),
   saveGlobalBindings: (payload) => ipcRenderer.invoke('bindings-save-global', payload),
+  shortcutsLoad: () => ipcRenderer.invoke('shortcuts-load'),
+  shortcutsSave: (payload) => ipcRenderer.invoke('shortcuts-save', payload),
+  deleteBatch: (payload) => ipcRenderer.invoke('batch-delete', payload),
   loadLang: (payload) => ipcRenderer.invoke('lang-load', payload),
   langList: () => ipcRenderer.invoke('lang-list'),
   systemTheme: () => ipcRenderer.invoke('system-theme'),
@@ -30,4 +33,9 @@ contextBridge.exposeInMainWorld('api', {
   minimize: () => ipcRenderer.send('minimize'),
   toggleAlwaysOnTop: (opts) => ipcRenderer.invoke('toggle-always-on-top', opts),
   copyText: (payload) => ipcRenderer.invoke('copy-text', payload),
+  apiStatus: () => ipcRenderer.invoke('api-status'),
+  apiToggle: () => ipcRenderer.invoke('api-toggle'),
+  openExternal: (payload) => ipcRenderer.invoke('open-external', payload),
+  // 本地 HTTP API 操作后，主进程通知渲染进程刷新界面
+  onApiRefresh: (cb) => ipcRenderer.on('api-refresh', (_e) => cb && cb()),
 });

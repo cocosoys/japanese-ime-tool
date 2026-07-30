@@ -103,4 +103,69 @@ export class ImportService {
   async undo(payload) {
     return this.importer.undo(payload);
   }
+
+  /**
+   * 导入单条自定义短语（code → word），三层字典文件各自合并现有词条后写回并触发 IME 重载。
+   * @param {{code:string, word:string, order?:number}} opts
+   * @returns {Promise<object>} 导入结果（含 added 记录与 reload 信息）
+   */
+  async addPhrase({ code, word, order = 1 } = {}) {
+    const rec = {
+      code: String(code ?? '').normalize('NFC'),
+      word: String(word ?? '').normalize('NFC'),
+      order: (order & 0xff) || 1,
+    };
+    if (!rec.code || !rec.word) throw new Error('code 和 word 均不能为空');
+
+    // 1. 主目标：EUDPv1.lex（mschxudp）— merge 保留现有
+    const mschx = await this.mschxudpExporter.export([rec], { filePath: this.importer.eudpPath, merge: true });
+    // 2. 兜底：UDL.dat — 按 word 合并现有
+    const udl = await this.udlExporter.exportMerge([rec], this.importer.targetPath);
+    // 3. 兜底：CustomPhrases/ChsUserPhrase.dat（machxudp）— 解析现有后追加（自身去重）
+    const existingMach = await this.machxudpExporter.parse(this.importer.legacyPath);
+    const seen = new Set(existingMach.map((e) => `${e.code}\u0000${e.word}`));
+    if (!seen.has(`${rec.code}\u0000${rec.word}`)) {
+      existingMach.push({ code: rec.code, word: rec.word, candidate: rec.order });
+    }
+    const mach = this.machxudpExporter.export(
+      existingMach.map((e) => ({ code: e.code, word: e.word, order: e.candidate }))
+    );
+
+    const result = await this.importer.import({ udlBuffer: udl, machxudpBuffer: mach, mschxudpBuffer: mschx });
+    return { ...result, added: rec };
+  }
+
+  /**
+   * 删除单条自定义短语（按 code + word 精确匹配），三层字典文件各自解析→过滤→重建→写回并重载。
+   * @param {{code:string, word:string}} opts
+   * @returns {Promise<object>} 导入结果（含 removed 记录与 reload 信息）
+   */
+  async deletePhrase({ code, word } = {}) {
+    const code0 = String(code ?? '').normalize('NFC');
+    const word0 = String(word ?? '').normalize('NFC');
+    if (!code0 || !word0) throw new Error('code 和 word 均不能为空');
+    const match = (e) => !(e.code === code0 && e.word === word0);
+
+    // 1. 主目标：EUDPv1.lex — 解析现有 → 过滤 → 重建（merge:false）
+    const existingEudp = await this.mschxudpExporter.parseExisting(this.importer.eudpPath);
+    const filteredEudp = existingEudp
+      .filter(match)
+      .map((e) => ({ code: e.code, word: e.word, order: e.candidate }));
+    const mschx = await this.mschxudpExporter.export(filteredEudp, { filePath: this.importer.eudpPath, merge: false });
+
+    // 2. 兜底：UDL.dat — 解析现有（含 code）→ 过滤 → 由原始 60 字节重建（merge:false）
+    const existingUdl = await this.udlExporter.parseEntriesWithCode(this.importer.targetPath);
+    const filteredUdl = existingUdl.filter(match).map((e) => e.raw);
+    const udl = this.udlExporter.buildFromRaws(filteredUdl);
+
+    // 3. 兜底：CustomPhrases/ChsUserPhrase.dat（machxudp）— 解析 → 过滤 → 重建
+    const existingMach = await this.machxudpExporter.parse(this.importer.legacyPath);
+    const filteredMach = existingMach
+      .filter(match)
+      .map((e) => ({ code: e.code, word: e.word, order: e.candidate }));
+    const mach = this.machxudpExporter.export(filteredMach);
+
+    const result = await this.importer.import({ udlBuffer: udl, machxudpBuffer: mach, mschxudpBuffer: mschx });
+    return { ...result, removed: { code: code0, word: word0 } };
+  }
 }
