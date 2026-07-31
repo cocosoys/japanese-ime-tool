@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getDataBaseDir } from './appPaths.js';
 
 /**
  * 快捷键配置存储 → ./data/shortcuts.json
@@ -18,8 +19,6 @@ import path from 'path';
  *
  * 与 bindings.json 同样采用独立 JSON 文件，避免写入扁平 YAML（config.yaml 仅支持标量）。
  */
-const DEFAULT_PATH = path.join(process.cwd(), 'data', 'shortcuts.json');
-
 // 5 个可触发动作及其出厂默认组合键（Alt+X/V/C/Z/B）
 export const SHORTCUT_ACTIONS = ['capture', 'doImport', 'doClear', 'doUndo', 'togglePhraseField'];
 
@@ -39,7 +38,7 @@ export function defaultShortcuts() {
 
 export class ShortcutsStore {
   constructor({ filePath } = {}) {
-    this.filePath = filePath || DEFAULT_PATH;
+    this.filePath = filePath || path.join(getDataBaseDir(), 'shortcuts.json');
   }
 
   /** 读取全部快捷键配置（缺失/损坏时回退默认值；保证 5 个动作齐全） */
@@ -83,5 +82,3 @@ export class ShortcutsStore {
     return merged;
   }
 }
-
-export { DEFAULT_PATH as SHORTCUTS_DEFAULT_PATH };

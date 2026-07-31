@@ -98,6 +98,7 @@ async function main() {
     version: pkg.version,
     description: pkg.description,
     main: pkg.main,
+    type: pkg.type || 'module', // 关键：保留 ESM 标识，否则打包后 Node 按 CJS 解析 import 会崩溃
     dependencies: pkg.dependencies || {},
   };
   await fs.writeFile(path.join(outDir, 'package.json'), JSON.stringify(appPkg, null, 2), 'utf8');

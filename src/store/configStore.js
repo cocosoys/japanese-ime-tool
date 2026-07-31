@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getDataBaseDir } from './appPaths.js';
 
 /**
  * 用户配置存储 → ./data/config.yaml
@@ -48,7 +49,7 @@ function parseYaml(text) {
 
 export class ConfigStore {
   constructor({ filePath } = {}) {
-    this.filePath = filePath || path.join(process.cwd(), 'data', 'config.yaml');
+    this.filePath = filePath || path.join(getDataBaseDir(), 'config.yaml');
   }
 
   /** 读取配置（缺失/损坏时返回默认值，多余字段保留） */

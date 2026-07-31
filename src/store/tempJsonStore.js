@@ -1,6 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { getDataBaseDir } from './appPaths.js';
 
 const DEFAULT_TMP = path.join(os.tmpdir(), 'japanese_names.json');
 
@@ -47,7 +48,7 @@ export class TempJsonStore {
    * @param {string} [opts.tmpFile] - 临时 JSON 路径（兼容旧逻辑）
    */
   constructor(opts = {}) {
-    this.baseDir = opts.baseDir || path.join(process.cwd(), 'data', 'names_data');
+    this.baseDir = opts.baseDir || path.join(getDataBaseDir(), 'names_data');
     this.tmpFile = opts.tmpFile || DEFAULT_TMP;
     this._currentDir = null;  // 当前抓取会话的日期目录
   }

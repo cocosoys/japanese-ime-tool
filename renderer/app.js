@@ -1755,6 +1755,145 @@ function hideAbout() {
   if (modal) modal.classList.add('hidden');
 }
 
+// ─── 版本管理（检查更新 / 回滚历史版本，只换 asar）───
+let versionBusy = false;
+
+function showVersion() {
+  $('#version-modal')?.classList.remove('hidden');
+  loadVersions();
+}
+function hideVersion() {
+  $('#version-modal')?.classList.add('hidden');
+}
+
+function compareSemver(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    if ((pa[i] || 0) > (pb[i] || 0)) return 1;
+    if ((pa[i] || 0) < (pb[i] || 0)) return -1;
+  }
+  return 0;
+}
+
+async function loadVersions() {
+  const statusEl = $('#version-status');
+  const hintEl = $('#version-hint');
+  if (statusEl) statusEl.textContent = t('ver.checking');
+  if (hintEl) hintEl.textContent = '';
+  try {
+    const { running, latest, versions } = await window.api.updaterList();
+    if (statusEl) {
+      statusEl.innerHTML = '';
+      const cur = document.createElement('div');
+      cur.textContent = t('ver.current', { version: running });
+      const lat = document.createElement('div');
+      lat.textContent = t('ver.latest', { version: latest });
+      statusEl.appendChild(cur);
+      statusEl.appendChild(lat);
+      if (compareSemver(latest, running) > 0) {
+        const up = document.createElement('div');
+        up.className = 'ver-update';
+        up.textContent = t('ver.hasUpdate', { version: latest });
+        statusEl.appendChild(up);
+      } else {
+        const ok = document.createElement('div');
+        ok.className = 'ver-uptodate';
+        ok.textContent = t('ver.upToDate');
+        statusEl.appendChild(ok);
+      }
+    }
+    renderVersionList(versions, running);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = t('ver.fail', { err: (e && e.message) || e });
+  }
+}
+
+function renderVersionList(versions, running) {
+  const listEl = $('#version-list');
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  [...versions].reverse().forEach((v) => {
+    const card = document.createElement('div');
+    card.className = 'ver-card ver-' + v.state;
+
+    const top = document.createElement('div');
+    top.className = 'ver-card-top';
+    const name = document.createElement('span');
+    name.className = 'ver-name';
+    name.textContent = 'v' + v.version;
+    const tag = document.createElement('span');
+    tag.className = 'ver-tag ver-tag-' + v.state;
+    tag.textContent = v.state === 'running' ? t('ver.running') : v.state === 'newer' ? t('ver.preview') : t('ver.older');
+    top.appendChild(name);
+    top.appendChild(tag);
+    if (v.mandatory) {
+      const m = document.createElement('span');
+      m.className = 'ver-tag ver-tag-must';
+      m.textContent = t('ver.mandatory');
+      top.appendChild(m);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'ver-meta';
+    meta.textContent = `${t('ver.pubAt')}：${v.pubAt || '-'}`;
+
+    const notes = document.createElement('div');
+    notes.className = 'ver-notes';
+    notes.textContent = v.notes || '';
+
+    const actions = document.createElement('div');
+    actions.className = 'ver-actions';
+    if (v.state === 'running') {
+      const cur = document.createElement('span');
+      cur.className = 'ver-cur';
+      cur.textContent = t('ver.runningNow');
+      actions.appendChild(cur);
+    } else {
+      const btn = document.createElement('button');
+      btn.className = 'vbtn ver-switch';
+      btn.textContent = t('ver.switch');
+      btn.dataset.version = v.version;
+      btn.addEventListener('click', () => switchVersion(v.version));
+      actions.appendChild(btn);
+    }
+
+    card.appendChild(top);
+    card.appendChild(meta);
+    if (v.notes) card.appendChild(notes);
+    card.appendChild(actions);
+    listEl.appendChild(card);
+  });
+}
+
+async function switchVersion(version) {
+  if (versionBusy) return;
+  versionBusy = true;
+  const hintEl = $('#version-hint');
+  const btn = document.querySelector(`.ver-switch[data-version="${version}"]`);
+  const setBusy = (txt) => { if (hintEl) hintEl.textContent = txt; };
+  try {
+    setBusy(t('ver.switching'));
+    if (btn) { btn.disabled = true; btn.textContent = t('ver.switching'); }
+    const res = await window.api.updaterSwitch({ version });
+    if (res && res.applied) {
+      setBusy(t('ver.applied'));
+      if (confirm(t('ver.appliedRestart'))) await window.api.updaterRestart();
+    } else if (res && res.pending) {
+      setBusy(t('ver.appliedPending'));
+      if (confirm(t('ver.appliedRestart'))) await window.api.updaterRestart();
+    } else {
+      setBusy(t('ver.fail', { err: 'unknown' }));
+    }
+  } catch (e) {
+    setBusy(t('ver.fail', { err: (e && e.message) || e }));
+  } finally {
+    versionBusy = false;
+  }
+  loadVersions();
+}
+
 /** 用户在模态框中选择操作 */
 async function onCloseChoice(action) {
   const cb = $('#close-modal-remember');
@@ -1791,6 +1930,20 @@ $('#btn-info')?.addEventListener('click', showAbout);
 $('#about-close')?.addEventListener('click', hideAbout);
 $('#about-modal')?.addEventListener('click', (e) => {
   if (e.target.id === 'about-modal') hideAbout();
+});
+// 版本管理弹窗：设置面板「版本」按钮打开、关闭/遮罩关闭、检查更新
+$('#set-version')?.addEventListener('click', showVersion);
+$('#version-close')?.addEventListener('click', hideVersion);
+$('#version-modal')?.addEventListener('click', (e) => { if (e.target.id === 'version-modal') hideVersion(); });
+$('#version-check')?.addEventListener('click', loadVersions);
+// 更新进度 / 日志（一次性注册，直接刷新提示区）
+window.api.onUpdaterProgress((p) => {
+  const hintEl = $('#version-hint');
+  if (hintEl && p && p.phase === 'download') hintEl.textContent = t('ver.download', { pct: p.pct || 0 });
+});
+window.api.onUpdaterLog((p) => {
+  const hintEl = $('#version-hint');
+  if (hintEl && p && p.msg) hintEl.textContent = p.msg;
 });
 // 点击模态框背景层关闭
 $('#close-modal')?.addEventListener('click', (e) => { if (e.target === e.currentTarget) hideCloseModal(); });

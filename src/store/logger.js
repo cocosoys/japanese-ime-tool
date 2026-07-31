@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getDataBaseDir } from './appPaths.js';
 
 /**
  * 日志模块 → ./data/logs/YYYY-MM-DD.log
@@ -18,7 +19,7 @@ function dateName(now = new Date()) {
 
 export class Logger {
   constructor({ dir } = {}) {
-    this.dir = dir || path.join(process.cwd(), 'data', 'logs');
+    this.dir = dir || path.join(getDataBaseDir(), 'logs');
   }
 
   async _write(level, msg) {

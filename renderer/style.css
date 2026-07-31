@@ -846,6 +846,86 @@ body.theme-dark .about-link:hover { color: #a5d8ff; }
 body.theme-dark .about-label { color: #8a93a2; }
 body.theme-dark .about-value { color: #cfd6e4; }
 
+/* 版本管理弹窗 */
+.version-modal {
+  position: fixed; inset: 0; z-index: 9200;
+  background: rgba(0,0,0,0.45); display: flex;
+  align-items: center; justify-content: center;
+}
+.version-modal.hidden { display: none; }
+.version-box {
+  width: 360px; max-width: 92vw; max-height: 86vh;
+  background: #fff; border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  padding: 18px 18px 14px; display: flex; flex-direction: column; gap: 12px;
+}
+.version-head { display: flex; align-items: center; justify-content: space-between; }
+.version-title { font-size: 15px; font-weight: 700; color: #c2255c; }
+.vbtn {
+  border: none; border-radius: 8px; cursor: pointer; font-weight: 600;
+  padding: 7px 14px; font-size: 12px; transition: all 0.15s;
+  background: linear-gradient(135deg,#ff8fab,#e64980); color: #fff;
+}
+.vbtn:hover { background: linear-gradient(135deg,#e64980,#d6336c); }
+.vbtn:disabled { opacity: 0.6; cursor: not-allowed; }
+.vclose { background: #eef1f4; color: #495057; }
+.vclose:hover { background: #dbe0e5; }
+.version-status {
+  font-size: 12px; line-height: 1.7; color: #495057;
+  background: #f8f9fa; border-radius: 8px; padding: 8px 10px;
+}
+.version-status .ver-update { color: #e8590c; font-weight: 700; margin-top: 2px; }
+.version-status .ver-uptodate { color: #2f9e44; font-weight: 600; margin-top: 2px; }
+.version-list {
+  display: flex; flex-direction: column; gap: 8px;
+  overflow-y: auto; max-height: 46vh; padding-right: 4px;
+}
+.ver-card {
+  border: 1px solid #eceef1; border-radius: 10px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 5px; background: #fff;
+}
+.ver-running { border-color: #b2f2bb; background: #f4fcf5; }
+.ver-newer { border-color: #ffec99; background: #fffdf2; }
+.ver-older { border-color: #eceef1; }
+.ver-card-top { display: flex; align-items: center; gap: 8px; }
+.ver-name { font-weight: 700; font-size: 13px; color: #343a40; }
+.ver-tag {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
+  background: #f1f3f5; color: #868e96; font-weight: 600;
+}
+.ver-tag-running { background: #d3f9d8; color: #2b8a3e; }
+.ver-tag-newer { background: #fff3bf; color: #e67700; }
+.ver-tag-older { background: #f1f3f5; color: #868e96; }
+.ver-tag-must { background: #ffe3e3; color: #c92a2a; }
+.ver-meta { font-size: 11px; color: #adb5bd; }
+.ver-notes { font-size: 11.5px; color: #868e96; line-height: 1.5; word-break: break-word; }
+.ver-actions { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.ver-cur { font-size: 11.5px; color: #2b8a3e; font-weight: 600; }
+.ver-switch { padding: 5px 12px; font-size: 11.5px; }
+.version-foot {
+  display: flex; align-items: center; gap: 10px;
+  border-top: 1px solid #f1f3f5; padding-top: 10px;
+}
+.version-hint { font-size: 11px; color: #868e96; word-break: break-word; }
+/* 版本按钮（设置面板内）与现有按钮风格一致 */
+.set-version #set-version {
+  width: 100%; padding: 8px; border-radius: 8px; cursor: pointer;
+  border: 1px solid #ffd0e0; background: #fff0f5; color: #c2255c; font-weight: 600; font-size: 12px;
+}
+.set-version #set-version:hover { background: #ffe3ee; }
+/* 版本弹窗暗色 */
+body.theme-dark .version-box { background: #232733; box-shadow: 0 20px 60px rgba(0,0,0,0.6); }
+body.theme-dark .version-title { color: #ff8fab; }
+body.theme-dark .version-status { background: #2b2f3a; color: #cfd6e4; }
+body.theme-dark .ver-card { background: #1f2330; border-color: #353a48; }
+body.theme-dark .ver-running { background: #1c2b1f; border-color: #2b8a3e; }
+body.theme-dark .ver-newer { background: #2b2716; border-color: #e67700; }
+body.theme-dark .ver-name { color: #cfd6e4; }
+body.theme-dark .version-hint { color: #8a93a2; }
+body.theme-dark .set-version #set-version { background: #2b2230; border-color: #5c2a3e; color: #ff8fab; }
+body.theme-dark .set-version #set-version:hover { background: #3a2a38; }
+
+
 /* 配置异常弹框：异常文件范围列表 */
 .config-error-list {
   margin: 6px 0 0; padding-left: 18px;

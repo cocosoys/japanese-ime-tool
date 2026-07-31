@@ -43,4 +43,12 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (payload) => ipcRenderer.invoke('open-external', payload),
   // 本地 HTTP API 操作后，主进程通知渲染进程刷新界面
   onApiRefresh: (cb) => ipcRenderer.on('api-refresh', (_e) => cb && cb()),
+  // 版本更新 / 回滚
+  updaterCheck: () => ipcRenderer.invoke('updater:check'),
+  updaterList: () => ipcRenderer.invoke('updater:list'),
+  updaterCurrent: () => ipcRenderer.invoke('updater:current'),
+  updaterSwitch: (payload) => ipcRenderer.invoke('updater:switch', payload),
+  updaterRestart: () => ipcRenderer.invoke('updater:restart'),
+  onUpdaterProgress: (cb) => ipcRenderer.on('updater-progress', (_e, p) => cb && cb(p)),
+  onUpdaterLog: (cb) => ipcRenderer.on('updater-log', (_e, p) => cb && cb(p)),
 });

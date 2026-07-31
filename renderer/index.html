@@ -58,6 +58,9 @@
           <span class="slider"></span>
         </label>
       </div>
+      <div class="set-row set-version">
+        <button id="set-version" data-i18n="set.version" data-i18n-tip="tip.version" data-tip="查看版本、检查更新、回滚历史版本">版本</button>
+      </div>
     </div>
 
     <!-- 数据统计面板：三张仪表卡 -->
@@ -221,6 +224,22 @@
           </div>
         </div>
         <button id="about-close" class="btn btn-sm btn-secondary" data-i18n="about.close">关闭</button>
+      </div>
+    </div>
+
+    <!-- 版本管理弹窗（设置 → 版本）：查看/检查更新/回滚历史版本 -->
+    <div id="version-modal" class="version-modal hidden">
+      <div class="version-box">
+        <div class="version-head">
+          <span class="version-title" data-i18n="ver.title">版本管理</span>
+          <button id="version-close" class="vbtn vclose" data-i18n="about.close">关闭</button>
+        </div>
+        <div class="version-status" id="version-status"></div>
+        <div class="version-list" id="version-list"></div>
+        <div class="version-foot">
+          <button id="version-check" class="vbtn" data-i18n="set.versionCheck">检查更新</button>
+          <span class="version-hint" id="version-hint"></span>
+        </div>
       </div>
     </div>
   </div>

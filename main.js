@@ -13,8 +13,10 @@ import { Logger } from './src/store/logger.js';
 import { detectConfigIssues, isolateIssues } from './src/store/configIntegrity.js';
 import { BUILTIN_CODES, BUILTIN_LANGS } from './src/store/builtinLang.js';
 import { getLangDir, ensureLangFiles, sanitizeLangCode, LOCALE_RE, isValidLangFile } from './src/store/langPaths.js';
+import { getDataBaseDir } from './src/store/appPaths.js';
 import { BINDING_LIMITS } from './src/implementations/binding/BindingStrategyFactory.js';
 import { createApiServer } from './src/api/server.js';
+import { ensureRunningMarker, applyPendingOnStartup, checkForUpdate, listVersions, applyVersion, getRunningVersion } from './src/updater/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,7 +30,7 @@ let collection, importer, configStore, bindingsStore, shortcutsStore, logger;
 /** 同步读取 config.yaml 中的 pinned 属性（窗口创建前需要知道置顶状态） */
 function readPinnedSync() {
   try {
-    const cfgPath = path.join(process.cwd(), 'data', 'config.yaml');
+    const cfgPath = path.join(getDataBaseDir(), 'config.yaml');
     const text = readFileSync(cfgPath, 'utf8');
     for (const line of text.split(/\r?\n/)) {
       const t = line.trim();
@@ -65,6 +67,10 @@ function createWindow(initialPinned = false) {
 }
 
 app.whenReady().then(async () => {
+  // ─── 启动早期：应用上次的 pending asar 替换 + 确保运行版本标记 ───
+  try { await ensureRunningMarker(); } catch { /* 非致命 */ }
+  try { await applyPendingOnStartup(); } catch (e) { console.error('pending asar 替换失败:', e); }
+
   // ─── 服务层初始化（延迟到此处，确保异常可被捕获而非静默崩溃）───
   try {
     collection = new NameCollectionService();
@@ -596,6 +602,22 @@ ipcMain.handle('open-external', (_e, { path } = {}) => {
   if (!path) return false;
   shell.openExternal(String(path));
   return true;
+});
+
+// ─── 版本更新 / 回滚（只换 asar，免重装；GitHub Release + gh.xmly.dev 镜像）───
+ipcMain.handle('updater:check', () => checkForUpdate());
+ipcMain.handle('updater:list', () => listVersions());
+ipcMain.handle('updater:current', () => getRunningVersion());
+ipcMain.handle('updater:restart', () => {
+  app.relaunch();
+  app.exit();
+  return true;
+});
+ipcMain.handle('updater:switch', async (e, { version }) => {
+  const sender = e.sender;
+  const onProgress = (pct) => { if (sender && !sender.isDestroyed()) sender.send('updater-progress', { phase: 'download', pct }); };
+  const onLog = (msg) => { if (sender && !sender.isDestroyed()) sender.send('updater-log', { msg }); };
+  return applyVersion(version, onProgress, onLog);
 });
 
 ipcMain.on('close', () => BrowserWindow.getFocusedWindow()?.close());

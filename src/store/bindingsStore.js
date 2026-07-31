@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { getDataBaseDir } from './appPaths.js';
 
 /**
  * 手动绑定存储 → ./data/bindings.json
@@ -20,12 +21,11 @@ import path from 'path';
  * 批次级绑定优先；某行在当前批次没有记录时，回退使用 __global__ 中同行号的绑定。
  * （批次目录名形如 2026-07-31_114932_1785469772230，不会与 "__global__" 冲突。）
  */
-const DEFAULT_PATH = path.join(process.cwd(), 'data', 'bindings.json');
 const GLOBAL_KEY = '__global__';
 
 export class BindingsStore {
   constructor({ filePath } = {}) {
-    this.filePath = filePath || DEFAULT_PATH;
+    this.filePath = filePath || path.join(getDataBaseDir(), 'bindings.json');
   }
 
   /** 读取全部绑定（缺失/损坏时返回 {}） */
@@ -62,4 +62,4 @@ export class BindingsStore {
   }
 }
 
-export { DEFAULT_PATH as BINDINGS_DEFAULT_PATH, GLOBAL_KEY as BINDINGS_GLOBAL_KEY };
+export { GLOBAL_KEY as BINDINGS_GLOBAL_KEY };
