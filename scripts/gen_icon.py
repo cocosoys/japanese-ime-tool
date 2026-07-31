@@ -1,7 +1,7 @@
 import math
 from PIL import Image, ImageDraw
 
-SS = 16 * 8  # 128x128 超采样，便于 16x16 抗锯齿
+SS = 64 * 8  # 512x512 超采样：源图 >= 256，确保 ICO 能写出 256x256 帧（PIL 不会从更小的源图上采样放大）
 SIZE = 16
 
 def make_flower(ss):
@@ -39,11 +39,14 @@ def make_flower(ss):
     return img
 
 big = make_flower(SS)
-icon16 = big.resize((SIZE, SIZE), Image.LANCZOS)
-icon16.save('assets/icon.png')
-print('wrote assets/icon.png', icon16.size)
+# 窗口图标用 256 高清图（避免模糊）
+iconPng = big.resize((256, 256), Image.LANCZOS)
+iconPng.save('assets/icon.png')
+print('wrote assets/icon.png', iconPng.size)
 
+# ICO 必须含 >=256x256 帧（electron-builder 硬性要求）。
+# 注意：ICOSave 用 sizes 参数从「源图」重采样，因此必须基于高清源图 big（512）调用，
+# 不能基于已缩到 16x16 的 frames[0]，否则只会写出 16x16。
 sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-frames = [big.resize(s, Image.LANCZOS) for s in sizes]
-frames[0].save('assets/icon.ico', sizes=[(s[0], s[1]) for s in sizes])
+big.save('assets/icon.ico', sizes=sizes)
 print('wrote assets/icon.ico with sizes', sizes)

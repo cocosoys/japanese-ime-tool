@@ -28,7 +28,7 @@ const OBF_OPTIONS = {
 // 显式混淆入口
 const OBF_ENTRIES = ['main.js', 'preload.cjs', 'renderer/app.js'];
 // 显式复制（原样）
-const COPY_ENTRIES = ['renderer/index.html', 'renderer/style.css', 'preload.js'];
+const COPY_ENTRIES = ['renderer/index.html', 'renderer/style.css', 'preload.js', 'assets/icon.png'];
 
 async function collectSrcJs() {
   const acc = [];

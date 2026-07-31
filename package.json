@@ -23,18 +23,18 @@
   "build": {
     "appId": "com.cocosoys.japaneseimetool",
     "compression": "maximum",
-    "electronLanguages": [
-      "en",
-      "zh-CN"
-    ],
-    "productName": "日文IME导入工具",
+    "productName": "JapaneseImeTool",
     "icon": "assets/icon.ico",
     "directories": {
       "app": "build/app",
-      "output": "release"
+      "output": "release-v2"
     },
     "files": [
-      "**/*"
+      "**/*",
+      "!docs",
+      "!test",
+      "!scripts",
+      "!*.md"
     ],
     "asar": true,
     "asarUnpack": [
@@ -50,7 +50,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "日文IME导入工具"
+      "shortcutName": "JapaneseImeTool"
     }
   }
 }

@@ -17,16 +17,13 @@ import { BINDING_LIMITS } from './src/implementations/binding/BindingStrategyFac
 import { createApiServer } from './src/api/server.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const collection = new NameCollectionService();
-const importer = new ImportService();
-const configStore = new ConfigStore();
-const bindingsStore = new BindingsStore();
-const shortcutsStore = new ShortcutsStore();
-const logger = new Logger();
 
 let mainWindow = null;       // 主窗口引用（用于 API 操作后通知渲染进程刷新）
 let apiServer = null;        // 本地 HTTP API 服务实例
 let tray = null;             // 系统托盘图标（隐藏窗口时显示）
+
+// 延迟到 app.whenReady 内初始化（避免打包环境异常导致无法捕获的崩溃）
+let collection, importer, configStore, bindingsStore, shortcutsStore, logger;
 
 /** 同步读取 config.yaml 中的 pinned 属性（窗口创建前需要知道置顶状态） */
 function readPinnedSync() {
@@ -68,6 +65,23 @@ function createWindow(initialPinned = false) {
 }
 
 app.whenReady().then(async () => {
+  // ─── 服务层初始化（延迟到此处，确保异常可被捕获而非静默崩溃）───
+  try {
+    collection = new NameCollectionService();
+    importer = new ImportService();
+    configStore = new ConfigStore();
+    bindingsStore = new BindingsStore();
+    shortcutsStore = new ShortcutsStore();
+    logger = new Logger();
+  } catch (e) {
+    console.error('[FATAL] 服务初始化失败:', e);
+    // 对话框需要 dialog 模块，此时 app 已 ready
+    const { dialog } = await import('electron');
+    dialog.showErrorBox('初始化失败', `应用服务层初始化异常：\n\n${e.message}\n\n${e.stack?.slice(0, 800) || ''}\n\n请确认安装目录完整且未被杀软拦截。`);
+    app.quit();
+    return;
+  }
+
   // 生产模式首次运行：把随包语言包复制到可写目录（userData/lang），作为运行期基础
   try { await ensureLangFiles(); } catch { /* 不影响启动 */ }
   createWindow(readPinnedSync());
