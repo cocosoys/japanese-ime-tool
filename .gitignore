@@ -2,7 +2,12 @@
 node_modules/
 
 # 运行时数据（抓取归档 / 配置 / 日志）
-data/
+data/logs/
+data/names_data/
+data/config.yaml
+data/bindings.json
+data/shortcuts.json
+data/names_data.json
 
 # 测试产物
 test/out.dat
