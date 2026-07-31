@@ -5,6 +5,9 @@ import { promises as fs } from 'fs';
 import { exec, execFile, spawn } from 'child_process';
 import path from 'path';
 
+// 进程内自增计数器，避免并发 _writeWithBackup 调用 tmp 文件名冲突
+let _tmpSeq = 0;
+
 /**
  * 写入微软拼音「用户自定义短语」并触发 IME 重载。
  *
@@ -145,9 +148,16 @@ export class MsPinyinImporter extends ImeImporter {
   async _writeWithBackup(target, buffer) {
     const backupPath = await this.createBackup(target);
     await fs.mkdir(path.dirname(target), { recursive: true });
-    const tmpFile = `${target}.tmp_${Date.now()}`;
-    await fs.writeFile(tmpFile, buffer);
-    await fs.rename(tmpFile, target);
+    // ⚠️ 用高精度时间戳 + 进程内自增计数器避免并发调用 tmp 文件名冲突
+    const tmpFile = `${target}.tmp_${Date.now()}_${++_tmpSeq}`;
+    try {
+      await fs.writeFile(tmpFile, buffer);
+      await fs.rename(tmpFile, target);
+    } catch (e) {
+      // 写入失败时清理残留 tmp，记录到 logger
+      try { await fs.unlink(tmpFile); } catch {}
+      throw e;
+    }
     return backupPath;
   }
 

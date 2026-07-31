@@ -242,9 +242,9 @@
         <div class="desc">返回所有已保存的数据批次目录名列表（按时间倒序，最新的在前）。</div>
         <table>
           <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-          <tr><td>batches</td><td><span class="type-tag">string[]</span></td><td>批次名数组（如 [&quot;2026-07-29_1025&quot;, &quot;2026-07-28_1537&quot;]）</td></tr>
+          <tr><td>batches</td><td><span class="type-tag">string[]</span></td><td>批次名数组（如 [&quot;2026-07-31_114932_1785469772230&quot;, &quot;2026-07-30_083712_1785398232364&quot;]）</td></tr>
         </table>
-        <div class="resp-example"><pre>{ "ok": true, "data": { "batches": ["2026-07-29_1025", "2026-07-28_1537"] } }</pre></div>
+        <div class="resp-example"><pre>{ "ok": true, "data": { "batches": ["2026-07-31_114932_1785469772230", "2026-07-30_083712_1785398232364"] } }</pre></div>
       </div>
     </div>
 
@@ -275,8 +275,8 @@
   "ok": true,
   "data": {
     "usage": [
-      { "batch": "2026-07-29_1025", "used": 5, "total": 21 },
-      { "batch": "2026-07-28_1537", "used": 21, "total": 21 }
+      { "batch": "2026-07-31_114932_1785469772230", "used": 5, "total": 21 },
+      { "batch": "2026-07-30_083712_1785398232364", "used": 21, "total": 21 }
     ]
   }
 }</pre></div>
@@ -314,7 +314,7 @@
         <div class="resp-example"><pre>{
   "ok": true,
   "data": {
-    "batch": "2026-07-29_1025",
+    "batch": "2026-07-31_114932_1785469772230",
     "field": "kanji",
     "entries": [
       { "kanji": "小川梨恵", "romaji": "Rie Ogawa", "hiragana": "りお おがわ", "field": "小川梨恵" },
@@ -405,7 +405,7 @@ Content-Type: application/json
           <tr><th>Strategy</th><th>Max Count</th><th>Description</th></tr>
           <tr><td>manual</td><td>9999</td><td>手动模式无限制</td></tr>
           <tr><td>manualGlobal</td><td>9999</td><td>手动全局模式无限制</td></tr>
-          <tr><td>qwerty</td><td>24</td><td>英文键位顺序（qwertyuiopasdfghjklzxcvb）</td></tr>
+          <tr><td>qwerty</td><td>26</td><td>英文键位顺序（qwertyuiopasdfghjklzxcvbnm）</td></tr>
           <tr><td>qwerFlow</td><td>12</td><td>英文键位流转顺序（qwerasdfzxcv）</td></tr>
         </table>
         <div class="sub-title">Response Fields</div>
@@ -420,14 +420,14 @@ Content-Type: application/json
         <div class="resp-example"><pre>// Request
 POST /api/import
 Content-Type: application/json
-{ "batch": "2026-07-29_1025", "count": 10, "binding": "qwerty", "phraseField": "kanji" }
+{ "batch": "2026-07-31_114932_1785469772230", "count": 10, "binding": "qwerty", "phraseField": "kanji" }
 
 // Response
 {
   "ok": true,
   "data": {
     "count": 10,
-    "batch": "2026-07-29_1025",
+    "batch": "2026-07-31_114932_1785469772230",
     "target": "C:\\...\\ChsPinyinEUDPv1.lex",
     "reloaded": { "killedChsIME": true, "method": "regsvr32" },
     "backupPath": "C:\\...\\backup\\..."
@@ -592,7 +592,7 @@ curl -X POST http://127.0.0.1:18765/api/fetch \
 # 4. 导入前 10 条（QWERTY 绑定）
 curl -X POST http://127.0.0.1:18765/api/import \
   -H "Content-Type: application/json" \
-  -d '{"batch":"2026-07-29_1025","count":10,"binding":"qwerty"}'
+  -d '{"batch":"2026-07-31_114932_1785469772230","count":10,"binding":"qwerty"}'
 
 # 5. 添加单条短语
 curl -X POST http://127.0.0.1:18765/api/phrase \

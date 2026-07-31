@@ -26,7 +26,7 @@ export class ImportService {
   buildRecords(entries, config, aliases = {}) {
     const cfg = config instanceof ImportConfig ? config : new ImportConfig(config);
     const strategy = createBindingStrategy(cfg.bindingStrategy, { locked: cfg.lockedBindings });
-    // 按绑定方式的限位器钳制导入数量（手动 9999 / manualGlobal 9999 / qwerty 24 / qwerFlow 12）
+    // 按绑定方式的限位器钳制导入数量（手动 9999 / manualGlobal 9999 / qwerty 26 / qwerFlow 12）
     const maxCount = (typeof strategy.limit === 'number') ? strategy.limit : Infinity;
     const slice = entries.slice(0, Math.min(cfg.count, maxCount));
     const records = [];
@@ -51,22 +51,50 @@ export class ImportService {
 
   /**
    * 构建记录并（若 orderMode='auto'）解析候选位置冲突。
-   *
+   * 候选位置为「固定」时也检测现有词条中 (code, order) 冲突，
+   * 返回 adjustments 让 UI 提示用户「即将覆盖」并确认。
    * @returns {Promise<{records: Array, adjustments: Array|null}>}
-   *   adjustments 仅在 auto 模式下有值，每项 {code, word, fromOrder, toOrder}
+   *   adjustments 仅在 auto/fixed 模式有冲突时有值；
+   *   - auto：每项 {code, word, fromOrder, toOrder}（自动避让结果）
+   *   - fixed：每项 {code, word, fromOrder}（即将覆盖的现有词条）
    */
   async buildRecordsWithResolution(entries, config, aliases = {}) {
     const cfg = config instanceof ImportConfig ? config : new ImportConfig(config);
     const records = this.buildRecords(entries, cfg, aliases);
 
-    if (cfg.orderMode !== 'auto') {
-      return { records, adjustments: null };
-    }
-
     // 自动模式：读取现有词条，检测 (code, candidate) 冲突
     const existing = await this.mschxudpExporter.parseExisting(this.importer.eudpPath);
-    const result = MschxudpExporter.resolveOrderConflicts(records, existing);
-    return result;
+
+    if (cfg.orderMode === 'auto') {
+      const result = MschxudpExporter.resolveOrderConflicts(records, existing);
+      return result;
+    }
+
+    // 固定模式：检测即将覆盖现有词条的 (code, order) 冲突，仅报告不修改
+    if (cfg.orderMode === 'fixed') {
+      const order = Math.max(1, cfg.orderValue | 0 || 1);
+      const occupied = new Map(); // key: "code\0order" -> {code, word, order}
+      for (const e of existing) {
+        occupied.set(`${e.code}\u0000${e.candidate}`, { code: e.code, word: e.word, candidate: e.candidate });
+      }
+      const adjustments = [];
+      const seen = new Set();
+      for (const r of records) {
+        const code = r.code || '';
+        const k = `${code}\u0000${order}`;
+        if (seen.has(k)) continue;
+        const hit = occupied.get(k);
+        if (hit && !seen.has(k)) {
+          // 即将覆盖现有词条
+          adjustments.push({ code, word: hit.word, fromOrder: order });
+          seen.add(k);
+        }
+      }
+      return { records, adjustments: adjustments.length ? adjustments : null };
+    }
+
+    // 其他模式（理论上不应出现）
+    return { records, adjustments: null };
   }
 
   async exportBuffer(entries, config, aliases, filePath) {
@@ -76,7 +104,14 @@ export class ImportService {
     // machxudp 格式（同步，旧版自定义短语位置）
     const machxudpBuffer = this.machxudpExporter.export(records);
     // mschxudp 格式（合并现有条目，Settings UI 真正读写的 EUDPv1.lex）
-    const mschxudpBuffer = await this.mschxudpExporter.export(records, { filePath: this.importer.eudpPath });
+    //    ⚠️ 同 addPhrase：当现有文件为空（count=0）时改用 merge=false 重建，
+    //    避免 Settings UI 在 clear→import 序列下产生「编辑：失败」。
+    let mergeEudp = true;
+    try {
+      const existing = await this.mschxudpExporter.parseExisting(this.importer.eudpPath);
+      if (existing.length === 0) mergeEudp = false;
+    } catch { mergeEudp = false; }
+    const mschxudpBuffer = await this.mschxudpExporter.export(records, { filePath: this.importer.eudpPath, merge: mergeEudp });
     return { records, udlBuffer, machxudpBuffer, mschxudpBuffer };
   }
 
@@ -118,7 +153,15 @@ export class ImportService {
     if (!rec.code || !rec.word) throw new Error('code 和 word 均不能为空');
 
     // 1. 主目标：EUDPv1.lex（mschxudp）— merge 保留现有
-    const mschx = await this.mschxudpExporter.export([rec], { filePath: this.importer.eudpPath, merge: true });
+    //    ⚠️ 修复：clear() 写空文件后，merge=true 仍走「读现有 + 加新」路径，
+    //    Settings UI 偶发 "编辑：失败"。当现有文件解析为空（count=0）时改为
+    //    merge=false 完全重建，避免与 _buildEmpty* 写入的空文件元数据冲突。
+    let mergeEudp = true;
+    try {
+      const existing = await this.mschxudpExporter.parseExisting(this.importer.eudpPath);
+      if (existing.length === 0) mergeEudp = false;
+    } catch { /* 读不到视为不存在，仍走 merge=false 重建 */ mergeEudp = false; }
+    const mschx = await this.mschxudpExporter.export([rec], { filePath: this.importer.eudpPath, merge: mergeEudp });
     // 2. 兜底：UDL.dat — 按 word 合并现有
     const udl = await this.udlExporter.exportMerge([rec], this.importer.targetPath);
     // 3. 兜底：CustomPhrases/ChsUserPhrase.dat（machxudp）— 解析现有后追加（自身去重）

@@ -5,15 +5,18 @@ import os from 'os';
 const DEFAULT_TMP = path.join(os.tmpdir(), 'japanese_names.json');
 
 /**
- * 生成精确到分钟的日期目录名，如 2026-07-28_0915
+ * 生成精确到秒 + 毫秒时间戳的目录名，如 2026-07-31_112021_1785468046751
+ * 格式：年-月-日_时分秒_自1970-01-01T00:00:00Z以来的毫秒数（13 位）
  */
 function dateDirName(now = new Date()) {
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const mo = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   const h = String(now.getHours()).padStart(2, '0');
   const min = String(now.getMinutes()).padStart(2, '0');
-  return `${y}-${m}-${d}_${h}${min}`;
+  const s = String(now.getSeconds()).padStart(2, '0');
+  const ms = String(now.getTime()); // 自 UTC+0 以来的毫秒数（13 位数字）
+  return `${y}-${mo}-${d}_${h}${min}${s}_${ms}`;
 }
 
 /** name.json 中每个子对象只保留这三个属性 */
@@ -26,8 +29,15 @@ function stripEntry(e) {
 }
 
 /**
+ * 批次目录名识别正则 —— 兼容新旧两种命名格式：
+ *   新格式：YYYY-MM-DD_HHmmss_<13位毫秒>（如 2026-07-31_114932_1785469772230）
+ *   旧格式：YYYY-MM-DD_HHmm（如 2026-07-31_1127，历史遗留）
+ */
+const BATCH_DIR_RE = /^\d{4}-\d{2}-\d{2}_\d{4}(?:\d{2}_\d{13})?$/;
+
+/**
  * 数据存储：
- *   归档目录 — ./data/names_data/日期(到分钟)/response.html + name.json
+ *   归档目录 — ./data/names_data/日期(到秒+毫秒)/response.html + name.json
  *   临时文件 — %TEMP%/japanese_names.json（UI 快速读取用）
  */
 export class TempJsonStore {
@@ -59,7 +69,7 @@ export class TempJsonStore {
   // ─── 数据归档模式 ───
 
   /**
-   * 创建/获取当前分钟的数据目录（如 ./data/names_data/2026-07-28_0915/）
+   * 创建/获取当前时间戳的数据目录（如 ./data/names_data/2026-07-31_114932_1785469772230/）
    * 同一次抓取会话内多次调用返回同一目录；新抓取前调用 resetDir()。
    */
   async getDataDir() {
@@ -100,7 +110,7 @@ export class TempJsonStore {
   async loadNamesJson() {
     try {
       const dirs = (await fs.readdir(this.baseDir))
-        .filter(d => /^\d{4}-\d{2}-\d{2}_\d{4}$/.test(d))
+        .filter(d => BATCH_DIR_RE.test(d))
         .sort()
         .reverse();
       if (dirs.length) {
@@ -127,7 +137,7 @@ export class TempJsonStore {
   async listBatches() {
     try {
       return (await fs.readdir(this.baseDir))
-        .filter((d) => /^\d{4}-\d{2}-\d{2}_\d{4}$/.test(d))
+        .filter((d) => BATCH_DIR_RE.test(d))
         .sort()
         .reverse();
     } catch { return []; }

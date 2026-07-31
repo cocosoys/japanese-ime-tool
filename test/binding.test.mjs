@@ -15,14 +15,14 @@ assert.strictEqual(manual.generate(entries[0], 0), ''); // 未锁定留空
 assert.strictEqual(manual.limit, 9999);
 console.log('✓ manual 绑定（含锁定，limit=9999）');
 
-// qwerty（英文键位顺序，24 位）
+// qwerty（英文键位顺序，26 位）
 const qwerty = createBindingStrategy('qwerty');
 assert.strictEqual(qwerty.generate(entries[0], 0), 'q');
 assert.strictEqual(qwerty.generate(entries[0], 9), 'p');  // 第 10 位 = p
-assert.strictEqual(qwerty.generate(entries[0], 23), 'b'); // 第 24 位 = b
-assert.strictEqual(qwerty.generate(entries[0], 24), '');  // 越界 → 空
-assert.strictEqual(qwerty.limit, 24);
-console.log('✓ qwerty 绑定（24 位，越界返回空）');
+assert.strictEqual(qwerty.generate(entries[0], 25), 'm'); // 第 26 位 = m
+assert.strictEqual(qwerty.generate(entries[0], 26), '');  // 越界 → 空
+assert.strictEqual(qwerty.limit, 26);
+console.log('✓ qwerty 绑定（26 位，越界返回空）');
 
 // qwerFlow（英文键位流转顺序，12 位）
 const qwerFlow = createBindingStrategy('qwerFlow');
@@ -39,8 +39,8 @@ assert.strictEqual(fallback.name, 'manual');
 console.log('✓ 未知类型回退 manual');
 
 // 限位器映射
-assert.deepStrictEqual(BINDING_LIMITS, { manual: 9999, manualGlobal: 9999, qwerty: 24, qwerFlow: 12 });
-console.log('✓ BINDING_LIMITS = { manual: 9999, manualGlobal: 9999, qwerty: 24, qwerFlow: 12 }');
+assert.deepStrictEqual(BINDING_LIMITS, { manual: 9999, manualGlobal: 9999, qwerty: 26, qwerFlow: 12 });
+console.log('✓ BINDING_LIMITS = { manual: 9999, manualGlobal: 9999, qwerty: 26, qwerFlow: 12 }');
 
 // manualGlobal（复用手动策略）
 const mg = createBindingStrategy('manualGlobal');

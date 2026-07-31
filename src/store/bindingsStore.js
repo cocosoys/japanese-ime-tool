@@ -18,7 +18,7 @@ import path from 'path';
  * 以「批次 + 原始行号」为稳定键，使手动绑定在排序重排、切换批次、重启程序后
  * 都能正确对应到原来的名字，且各批次互不干扰。
  * 批次级绑定优先；某行在当前批次没有记录时，回退使用 __global__ 中同行号的绑定。
- * （批次目录名形如 2026-07-28_0937，不会与 "__global__" 冲突。）
+ * （批次目录名形如 2026-07-31_114932_1785469772230，不会与 "__global__" 冲突。）
  */
 const DEFAULT_PATH = path.join(process.cwd(), 'data', 'bindings.json');
 const GLOBAL_KEY = '__global__';

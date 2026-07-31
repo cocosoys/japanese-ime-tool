@@ -20,6 +20,7 @@ const DEFAULTS = {
   apiEnabled: true,         // 本地 HTTP API 服务（127.0.0.1）是否启用
   apiPort: 18765,           // 本地 HTTP API 监听端口
   closeBehavior: 'ask',     // 关闭按钮行为：'ask'=询问 / 'close'=直接关闭 / 'minimize'=最小化
+  devMode: false,           // 开发者提示模式（启用后状态栏/错误提示显示完整诊断信息）
 };
 
 function toYaml(obj) {

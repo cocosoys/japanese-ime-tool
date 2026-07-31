@@ -559,8 +559,23 @@ body.theme-dark .empty { color: #5f6b7a; }
 .batch-list {
   position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60;
   background: #fff; border: 1px solid #d6dde3; border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.18); max-height: 240px; overflow-y: auto; padding: 4px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
+  /* 限 5 个 batch-item 可见（约 32px/项 × 5 = 160px），溢出通过滚轮/竖直滑动条滚动 */
+  max-height: 160px; overflow-y: auto;
+  padding: 4px;
+  /* Firefox 滚动条：细 + 半透明 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
 }
+/* WebKit 自定义滚动条：细 + 半透明 */
+.batch-list::-webkit-scrollbar { width: 4px; height: 4px; }
+.batch-list::-webkit-scrollbar-track { background: transparent; }
+.batch-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18); border-radius: 2px;
+  transition: background 0.15s;
+}
+.batch-list::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.32); }
+.batch-list::-webkit-scrollbar-corner { background: transparent; }
 .batch-list.hidden { display: none; }
 .batch-item {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px;
@@ -632,7 +647,9 @@ body.theme-dark .hide-status-btn:hover { background: rgba(255,255,255,0.14); col
 /* 批次下拉暗色 */
 body.theme-dark .batch-btn { background: #2b2f3a; color: #cfd6e4; }
 body.theme-dark .batch-btn .caret { color: #8a93a2; }
-body.theme-dark .batch-list { background: #2b2f3a; border-color: #3a3f4d; box-shadow: 0 10px 28px rgba(0,0,0,0.5); }
+body.theme-dark .batch-list { background: #2b2f3a; border-color: #3a3f4d; box-shadow: 0 10px 28px rgba(0,0,0,0.5); scrollbar-color: rgba(255,255,255,0.18) transparent; }
+body.theme-dark .batch-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
+body.theme-dark .batch-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.32); }
 body.theme-dark .batch-item:hover { background: #363b48; }
 body.theme-dark .batch-item.active { background: #3a2d33; }
 body.theme-dark .batch-name { color: #cfd6e4; }
@@ -864,22 +881,45 @@ body.theme-dark .ce-reason { color: #8a93a2; }
   font-size: 10px; color: #868e96; flex: none;
 }
 .preview-arrow { color: #adb5bd; flex: none; font-weight: 700; }
+/* __all__ 抓取占位行（待生成）：整行统一淡黄色底纹（如同 v/n 行） */
+.preview-placeholder { background: #fff8e1; }
+.preview-placeholder .preview-code { color: #b45309; }
+.preview-placeholder .preview-word { color: #b45309; font-style: italic; font-weight: 500; }
+body.theme-dark .preview-placeholder { background: rgba(217, 119, 6, 0.15); }
+body.theme-dark .preview-placeholder .preview-code { color: #fbbf24; }
+body.theme-dark .preview-placeholder .preview-word { color: #fbbf24; }
 .preview-word {
-  flex: 1; min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; color: #212529;
+  flex: 1; min-width: 0;
+  overflow-wrap: anywhere; word-break: break-word;
+  color: #212529;
   font-weight: 500;
 }
+.preview-hint {
+  flex: none; font-size: 11px; color: #868e96; margin-left: 6px;
+  font-style: italic;
+}
+.preview-header {
+  margin-bottom: 8px; padding: 0 2px;
+  font-size: 12px; line-height: 1.55; color: #495057;
+}
+.preview-header div { margin: 1px 0; }
 
 .preview-skip-wrap {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   font-size: 12px; color: #868e96; cursor: pointer;
   margin-right: auto; padding: 4px 0;
   user-select: none;
+  max-width: 100%;
 }
-.preview-skip-wrap input[type="checkbox"] {
-  accent-color: #ff758c; cursor: pointer;
+/* 独立复选框样式（与 label 平级而非嵌套在 <label> 里） */
+.preview-skip-wrap .preview-skip-cb {
+  accent-color: #ff758c; cursor: pointer; margin: 0;
+  width: 14px; height: 14px;
 }
-.preview-skip-wrap span { line-height: 1; }
+.preview-skip-wrap .preview-skip-label {
+  cursor: pointer; line-height: 1.4;
+  word-break: break-word; overflow-wrap: anywhere;
+}
 
 body.theme-dark .preview-list { background: #1a1d24; border-color: #3a3f4d; }
 body.theme-dark .preview-item:nth-child(even) { background: rgba(255,255,255,0.02); }
@@ -888,3 +928,5 @@ body.theme-dark .preview-code { color: #ff8fab; }
 body.theme-dark .preview-idx { color: #5f6b7a; }
 body.theme-dark .preview-arrow { color: #495057; }
 body.theme-dark .preview-word { color: #e2e6ee; }
+body.theme-dark .preview-hint { color: #6c757d; }
+body.theme-dark .preview-header { color: #cfd6e4; }

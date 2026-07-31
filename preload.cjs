@@ -4,6 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 // 暴露受限 API 给渲染进程（不直接暴露 Node）
 contextBridge.exposeInMainWorld('api', {
   collect: (opts) => ipcRenderer.invoke('collect', opts),
+  collectMultiple: (payload) => ipcRenderer.invoke('collect-multiple', payload),
+  collectCancel: () => ipcRenderer.invoke('collect-cancel'),
+  onCollectProgress: (cb) => ipcRenderer.on('collect-progress', (_e, payload) => cb && cb(payload)),
   autoCf: (opts) => ipcRenderer.invoke('auto-cf', opts),
   collectFromHtml: (payload) => ipcRenderer.invoke('collect-from-html', payload),
   cached: () => ipcRenderer.invoke('cached'),
@@ -32,6 +35,8 @@ contextBridge.exposeInMainWorld('api', {
   close: () => ipcRenderer.send('close'),
   minimize: () => ipcRenderer.send('minimize'),
   toggleAlwaysOnTop: (opts) => ipcRenderer.invoke('toggle-always-on-top', opts),
+  setGlobalShortcuts: (payload) => ipcRenderer.invoke('set-global-shortcuts', payload),
+  onTriggerShortcut: (cb) => ipcRenderer.on('trigger-shortcut', (_e, payload) => cb && cb(payload)),
   copyText: (payload) => ipcRenderer.invoke('copy-text', payload),
   apiStatus: () => ipcRenderer.invoke('api-status'),
   apiToggle: () => ipcRenderer.invoke('api-toggle'),

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, clipboard, nativeTheme, shell, Tray, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, clipboard, nativeTheme, shell, globalShortcut, Tray, Menu } from 'electron';
 import path from 'path';
 import { promises as fsp, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -228,6 +228,57 @@ ipcMain.handle('collect', async (_e, opts) => {
     throw err;
   }
 });
+
+// ─── 多轮抓取：循环调用 autoCf + collectFromHtml 直到累计条数达 targetCount 或被取消 ───
+// 在主进程内异步循环（非独立线程，但与渲染进程并行）；通过 webContents.send 推送进度事件；
+// 通过模块级 _collectCancel 标志位接收取消请求。返回 { entries, batches, cancelled, rounds }。
+let _collectCancel = false;
+function resetCollectCancel() { _collectCancel = false; }
+function stopCollect() { _collectCancel = true; }
+ipcMain.handle('collect-cancel', () => { stopCollect(); return { ok: true }; });
+ipcMain.handle('collect-multiple', async (e, { targetCount, gender, popularity, url } = {}) => {
+  resetCollectCancel();
+  const entriesAcc = [];
+  const batchesAcc = [];
+  // 平均每轮 ~20 条；不足则继续；上限设大避免无限循环
+  const MAX_ROUNDS = 50;
+  for (let round = 1; round <= MAX_ROUNDS; round++) {
+    if (_collectCancel) break;
+    if (entriesAcc.length >= targetCount) break;
+    try {
+      e.sender.send('collect-progress', { round, rounds: MAX_ROUNDS, collected: entriesAcc.length, target: targetCount, phase: 'cf' });
+      const { cookie, html } = await runAutoCf({ url });
+      let result = null;
+      if (html && html.length > 500) {
+        e.sender.send('collect-progress', { round, rounds: MAX_ROUNDS, collected: entriesAcc.length, target: targetCount, phase: 'parse' });
+        result = await (async () => {
+          collection.store.resetDir();
+          const htmlPath = await collection.store.saveHtml(html);
+          const items = collection.parser.parse(html);
+          const ents = items.map((it) => new NameEntry(it));
+          const jsonPath = await collection.store.saveNamesJson(ents.map((x) => x.toJSON()));
+          return {
+            entries: ents.map((x) => x.toJSON()),
+            batch: path.basename(path.dirname(jsonPath)),
+            count: ents.length,
+          };
+        })();
+      } else if (cookie) {
+        const fetched = await collection.collect({ cookie, gender, popularity });
+        result = { entries: fetched.map((e) => e.toJSON()), batch: null, count: fetched.length };
+      }
+      if (result) {
+        entriesAcc.push(...(result.entries || []));
+        if (result.batch) batchesAcc.push(result.batch);
+      }
+    } catch (err) {
+      logger.warn(`collect-multiple 第 ${round} 轮失败：${err.message}`);
+      // 一轮失败不中断整个流程，继续下一轮
+    }
+    e.sender.send('collect-progress', { round, rounds: MAX_ROUNDS, collected: entriesAcc.length, target: targetCount, phase: 'idle' });
+  }
+  return { entries: entriesAcc, batches: batchesAcc, cancelled: _collectCancel, rounds: MAX_ROUNDS };
+});
 ipcMain.handle('cached', async () => {
   const entries = await collection.loadCached();
   return entries.map((e) => e.toJSON());
@@ -283,6 +334,21 @@ ipcMain.handle('undo-ime', async (_e, payload) => {
 // ─── 批次管理：不同日期生成的名称 + used.json 已使用记录 ───
 ipcMain.handle('batches', () => collection.store.listBatches());
 ipcMain.handle('batch-load', async (_e, { batch }) => {
+  // __all__：聚合所有批次（entries 合并并打 __batch 标签、used 取并集）
+  if (batch === '__all__') {
+    const all = await collection.store.listBatches();
+    const entriesAcc = [];
+    const usedSet = new Set();
+    for (const b of all) {
+      try {
+        const data = await collection.store.loadBatch(b);
+        for (const e of (data.entries || [])) entriesAcc.push({ ...e, __batch: b });
+        for (const u of (data.used || [])) usedSet.add(u);
+      } catch { /* 单个批次失败不影响整体聚合 */ }
+    }
+    logger.info(`聚合加载 __all__：${all.length} 个批次，${entriesAcc.length} 条名称，${usedSet.size} 条已用`);
+    return { entries: entriesAcc, used: Array.from(usedSet), __all__: true, batches: all };
+  }
   const data = await collection.store.loadBatch(batch);
   logger.info(`加载批次 ${batch}：${data.entries.length} 条名称，${data.used.length} 条已使用`);
   return data;
@@ -430,13 +496,49 @@ ipcMain.handle('system-theme', () => ({ dark: nativeTheme.shouldUseDarkColors })
 
 // 固定到窗口最前面（切换 alwaysOnTop，返回新状态）
 // opts.pinned 为布尔时直接设定该状态；省略则切换当前状态
-ipcMain.handle('toggle-always-on-top', (e, opts = {}) => {
+// 置顶时同步把渲染层注册的 enabled 快捷键提升到 globalShortcut（任意焦点都生效）
+ipcMain.handle('toggle-always-on-top', async (e, opts = {}) => {
   const win = BrowserWindow.fromWebContents(e.sender);
   if (!win) return { pinned: true };
   const next = (typeof opts.pinned === 'boolean') ? opts.pinned : !win.isAlwaysOnTop();
   win.setAlwaysOnTop(next);
   logger.info(`置顶状态：${next ? '已固定' : '已取消固定'}`);
+  if (next) {
+    // 置顶时把渲染层当前 shortcuts 注册为 globalShortcut（renderer 需先调用 set-global-shortcuts）
+    for (const [combo, action] of Object.entries(_lastShortcuts)) {
+      if (!combo || !action) continue;
+      try { globalShortcut.register(combo, () => _fireShortcutAction(action, win)); }
+      catch (err) { logger.warn(`globalShortcut 注册失败：${combo} (${action}) → ${err.message}`); }
+    }
+  } else {
+    // 取消置顶时注销所有 globalShortcut
+    try { globalShortcut.unregisterAll(); } catch {}
+  }
   return { pinned: next };
+});
+
+/** 上一次注册的快捷键映射（combo → action），供 toggle-always-on-top 在置顶时复用 */
+let _lastShortcuts = {};
+
+/** 触发渲染进程中的快捷键动作（通过 webContents.send 通知渲染进程执行） */
+function _fireShortcutAction(action, win) {
+  try {
+    const target = win || BrowserWindow.getAllWindows()[0];
+    if (!target || target.isDestroyed()) return;
+    target.webContents.send('trigger-shortcut', { action });
+  } catch (err) { logger.warn(`触发快捷键动作失败：${action} → ${err.message}`); }
+}
+
+/** 渲染层把当前启用的快捷键配置同步到主进程（仅保存，待置顶时提升为 globalShortcut） */
+ipcMain.handle('set-global-shortcuts', (_e, payload) => {
+  const map = {};
+  const arr = (payload && payload.shortcuts) || [];
+  for (const sc of arr) {
+    if (!sc || !sc.combo || !sc.enabled || !sc.action) continue;
+    map[sc.combo] = sc.action;
+  }
+  _lastShortcuts = map;
+  return { ok: true, count: Object.keys(map).length };
 });
 
 // 复制文本到系统剪贴板（供名称点击复制使用）

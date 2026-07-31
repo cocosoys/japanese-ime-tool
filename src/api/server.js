@@ -151,7 +151,7 @@ export function createApiServer(ctx) {
    * @example
    * // POST /api/fetch
    * // Request: { gender: "G", popularity: "popular" }
-   * // Response: { ok: true, data: { count: 21, batch: "2026-07-29_1025", entries: [...] } }
+   * // Response: { ok: true, data: { count: 21, batch: "2026-07-31_114932_1785469772230", entries: [...] } }
    */
   async function doFetch(body) {
     const gender = body.gender || 'G';
@@ -204,8 +204,8 @@ export function createApiServer(ctx) {
    *
    * @example
    * // POST /api/import
-   * // Request: { batch: "2026-07-29_1025", count: 10, binding: "qwerty" }
-   * // Response: { ok: true, data: { count: 10, batch: "2026-07-29_1025", target: "...", reloaded: {...} } }
+   * // Request: { batch: "2026-07-31_114932_1785469772230", count: 10, binding: "qwerty" }
+   * // Response: { ok: true, data: { count: 10, batch: "2026-07-31_114932_1785469772230", target: "...", reloaded: {...} } }
    */
   async function doImport(body) {
     const batches = await collection.store.listBatches();

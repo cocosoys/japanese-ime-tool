@@ -13,12 +13,15 @@ A small Electron floating-window tool for Windows that scrapes Japanese names (k
 - **Four binding modes**:
   - **Manual**: fill the IME code (pinyin string) row by row; lockable to prevent accidental changes.
   - **Manual (global)**: codes are written to a global default binding, reused across batches, also editable and lockable.
-  - **QWERTY key order**: auto-assigned by `q w e r t y u i o p a s d f g h j k l z x c v b`, up to 24 entries.
+  - **QWERTY key order**: auto-assigned by `q w e r t y u i o p a s d f g h j k l z x c v b n m`, up to 26 entries.
   - **QWERTY flow order (qwerFlow)**: assigned by the rotating sequence `q w e r a s d f z x c v`, up to 12 entries.
 - **One-click import**: write the first N names of the current batch into Microsoft Pinyin user phrases. A preview is shown before importing (≈10 per screen, scrollable) with a "Don't remind me again" option.
-- **Batch management**: switch batches via dropdown; each batch has a **green/red dual-color progress bar** (green = unused / red = used) showing usage in real time.
+- **All data batches (aggregate)**: the first dropdown item "All data batches" aggregates every batch; names are consumed **oldest batch first**, and **already-used data is never reused** — when the current data is short of the import count, a placeholder preview appears (missing entries shown in yellow as "Generated after confirm"), then after confirmation the tool **auto-fetches in multiple rounds** (with a live progress dialog that can be force-stopped), and finally shows the real preview again for a second confirmation.
+- **Batch management**: switch batches via dropdown; the list is refreshed automatically every time it opens, showing 5 batches per screen — more batches scroll via the wheel or a **thin translucent vertical scrollbar**; each batch has a **green/red dual-color progress bar** (green = unused / red = used) showing usage in real time. Batch folders are named by fetch time (`YYYY-MM-DD_HHmmss_ms`, e.g. `2026-07-31_114932_1785469772230`).
 - **Manual-binding shortage prompt**: in Manual mode, if the import count exceeds the number of rows with a code filled, a dialog lets you auto-complete / force-continue / cancel.
-- **Settings panel**: switch UI language (zh/zh-TW/en/ja/ko) and theme (light/dark/system); pin the window on top.
+- **In-app confirmation dialogs**: destructive actions such as "Clear all" use the same in-app dialog style as the import preview (with a "Don't remind me again" checkbox, persisted once ticked).
+- **Compact status bar + developer mode**: by default the status bar shows a compact result (e.g. "Imported 21 entries → IME reloaded"); enabling "Developer mode" in settings shows full diagnostics (file paths, reload method, etc.).
+- **Settings panel**: switch UI language (zh/zh-TW/en/ja/ko) and theme (light/dark/system); pin the window on top; developer-mode toggle.
 - **Local HTTP API**: a built-in local API service (bound to `127.0.0.1`) that can be toggled from the settings panel; when enabled, the API documentation link (`docs/api-docs.html`) is shown below it, handy for developers to integrate or automate.
 - **Close behavior**: clicking the close button shows a choice (close the app / hide to tray). You can tick "Remember" to persist it and apply directly on next launch.
 - **Persistent config**: language, theme, phrase field, binding mode, import count, pin state, API toggle, close behavior, and last opened batch are saved to `config.yaml` and restored on next launch.
@@ -46,9 +49,9 @@ npm run dev
 1. **Fetch data**: choose gender and style, click "⚡Fetch" to generate and save a batch.
 2. **Choose phrase field**: click a top stat card (kanji / romaji / hiragana) or use the dropdown; the active card is highlighted.
 3. **Choose binding mode**: Manual fills codes row by row and locks; qwerty / qwerFlow auto-assign keys.
-4. **Choose batch**: switch via the "Data batch" dropdown; the progress bar shows each batch's usage.
-5. **One-click import**: set the count, click "Import", confirm the preview, then it's written to the IME.
-6. **Undo / Clear**: "Undo" reverts the last import; "Clear all" empties all user phrases (undoable).
+4. **Choose batch**: switch via the "Data batch" dropdown (auto-refreshed every time it opens); the progress bar shows each batch's usage; choose "All data batches" to consume every batch oldest-first in aggregate.
+5. **One-click import**: set the count, click "Import", confirm the preview, then it's written to the IME. If "All data batches" lacks enough data, a placeholder preview appears first (missing rows shown yellow as "Generated after confirm"); after confirmation the tool auto-fetches in multiple rounds (force-stoppable), then shows the final preview for a second confirmation.
+6. **Undo / Clear**: "Undo" reverts the last import; "Clear all" empties all user phrases (in-app confirmation with "Don't remind me again"; undoable).
 
 ## ⚙️ Configuration (config.yaml)
 
@@ -66,11 +69,15 @@ Located at `data/config.yaml`:
 | `pinned` | Pin on top | `false` |
 | `lastBatch` | Last opened batch name (restored on launch) | `''` |
 | `skipImportPreview` | Skip import preview | `false` |
+| `skipClearConfirm` | Skip the "Clear all" confirmation dialog | `false` |
+| `skipUsedInSlice` | Skip the "partially used data" prompt | `false` |
+| `skipOrderAdjust` / `skipOrderOverwrite` | Skip candidate-position conflict adjust / overwrite confirmation | `false` |
 | `orderMode` | Candidate position mode fixed/auto | `fixed` |
 | `orderValue` | Fixed-mode candidate position | `1` |
 | `apiEnabled` | Whether the local HTTP API is enabled | `true` |
 | `apiPort` | Local HTTP API listening port | `18765` |
 | `closeBehavior` | Close-button behavior: ask=prompt / close=quit directly / minimize=hide to tray | `ask` |
+| `devMode` | Developer mode (status bar shows full diagnostics) | `false` |
 
 ## 🔌 Local API (for developers)
 
@@ -113,6 +120,8 @@ japanese-ime-tool/
 - Windows + Microsoft Pinyin IME only; depends on the user-defined phrase file format.
 - Imported phrases need a valid code (trigger code); entries with empty codes cannot be edited in IME settings.
 - The scraping feature depends on a third-party site's structure and may break if it changes.
+- Batch folders are named `YYYY-MM-DD_HHmmss_ms` (e.g. `2026-07-31_114932_1785469772230`); legacy `YYYY-MM-DD_HHmm` folders are still recognized.
+- The three lexicon files (UDL / EUDP / machxudp) are written together and deduplicated consistently by code+phrase, avoiding "edit failed" in the IME settings caused by mismatched entry counts.
 
 ## 📄 License
 

@@ -46,7 +46,9 @@ export class MspyUdlExporter extends PhraseExporter {
       ? existingEntries[0].raw.slice(7, 10)
       : Buffer.from([0x00, 0x00, 0x00]);
 
-    const existingWords = new Set(existingEntries.map((e) => e.word));
+    // ⚠️ 修复：原按 word 单独去重，导致与 mschxudp/machxudp（按 code+word 去重）不一致，
+    // 三方文件条目数不匹配时 Windows Settings UI 报「编辑：失败」。改为按 code+word 去重。
+    const existingKeys = new Set(existingEntries.map((e) => `${e.code}\u0000${e.word}`));
     const newEntries = [];
     for (const r of records) {
       let word = r.word || '';
@@ -56,9 +58,10 @@ export class MspyUdlExporter extends PhraseExporter {
       // NFC 规范化（与 mschxudp 保持一致，避免编码差异）
       word = word.normalize('NFC');
       code = code.normalize('NFC');
-      if (existingWords.has(word)) continue; // 去重：已存在则不重复添加
+      const key = `${code}\u0000${word}`;
+      if (existingKeys.has(key)) continue; // 去重：同 code+word 已存在则不重复添加
       newEntries.push(this._makeEntry(r, reserved, code, word));
-      existingWords.add(word);
+      existingKeys.add(key);
     }
 
     // 合并：已有原始 60 字节 + 新条目

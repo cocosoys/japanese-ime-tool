@@ -11,12 +11,12 @@ const state = {
   // 跨批次保留（切批次不清空），持久化到 ./data/bindings.json
   batchBindings: {},
   aliases: {},                 // { [行号(批次内原始位置)]: [code,...] } —— 仅内存，切批次清空（按需求不持久化）
-  batch: null,                 // 当前选中的批次目录名（如 2026-07-28_0937）
+  batch: null,                 // 当前选中的批次目录名（如 2026-07-31_114932_1785469772230）
   used: new Set(),             // 已使用值集合（存「短语字段的值」，持久化到 used.json）
   lastImportInfo: null,        // 上一次导入信息（用于撤回）：{ usedKeysAdded: string[], backupPath?: string }
   lang: 'zh-CN',               // 界面语言
   theme: 'system',             // 主题：light / dark / system
-  bindingLimits: { manual: 9999, manualGlobal: 9999, qwerty: 24, qwerFlow: 12 }, // 各绑定方式导入数量限位器（由 IPC 覆盖）
+  bindingLimits: { manual: 9999, manualGlobal: 9999, qwerty: 26, qwerFlow: 12 }, // 各绑定方式导入数量限位器（由 IPC 覆盖）
   batches: [],                 // 全部批次目录名
   batchUsage: {},              // { [batch]: { used, total } } 按当前短语字段统计的使用情况
   shortcuts: null,             // 快捷键配置：{ [action]: { combo, enabled } }（null=未加载，回退默认）
@@ -156,6 +156,18 @@ function setStatusBar(msg, kind = '') {
 // 兼容别名：历史代码中的 setStatus 一律输出到底部栏
 const setStatus = setStatusBar;
 
+/** 当前是否启用开发者提示模式（config.devMode）；启用后状态栏/错误提示显示完整诊断信息 */
+function devModeOn() { return !!(state.config && state.config.devMode); }
+
+/** 状态栏智能输出：dev 模式显示完整信息，否则精简；错误态强制走 devKey（保留诊断） */
+function setStatusSmart(key, params, devKey, devParams, kind) {
+  if ((devModeOn() && devKey) || kind === 'err') {
+    setStatusBar(t(devKey || key, devParams || params || {}), kind || 'ok');
+  } else {
+    setStatusBar(t(key, params || {}), kind || 'ok');
+  }
+}
+
 // ─── 配置持久化（./data/config.yaml） ───
 
 function readConfigFromUi() {
@@ -181,6 +193,9 @@ function applyConfigToUi(cfg) {
   if (cfg.orderValue) $('#orderValue').value = cfg.orderValue;
   if (cfg.lang) $('#set-lang').value = cfg.lang;
   if (cfg.theme) $('#set-theme').value = cfg.theme;
+  // 开发者模式开关（关闭时隐藏诊断信息）
+  const devCb = $('#set-devmode');
+  if (devCb) devCb.checked = !!cfg.devMode;
   updateOrderValueVisibility();
 }
 
@@ -219,13 +234,38 @@ function usedKey(e, field = currentField()) {
 
 function isEntryUsed(e) { return state.used.has(usedKey(e)); }
 
-function persistUsed() {
-  if (!state.batch) return Promise.resolve();
+async function persistUsed() {
+  if (!state.batch) return;
+  // __all__ 模式：按条目 __batch 把 state.used 中属于该批次的 key 合并到对应 used.json
+  if (state.batch === '__all__' && state.__allKeyToBatch) {
+    const writes = [];
+    const batchToKeys = new Map();      // batch -> Set(usedKey)
+    for (const k of state.used) {
+      const b = state.__allKeyToBatch.get(k);
+      if (!b) continue;
+      if (!batchToKeys.has(b)) batchToKeys.set(b, new Set());
+      batchToKeys.get(b).add(k);
+    }
+    for (const [batch, keys] of batchToKeys.entries()) {
+      writes.push(window.api.saveUsed({ batch, used: [...keys] }).catch(() => {}));
+    }
+    await Promise.all(writes);
+    return;
+  }
   return window.api.saveUsed({ batch: state.batch, used: [...state.used] }).catch(() => {});
 }
 
 function sortedView() {
-  return [...state.entries].sort((a, b) => (isEntryUsed(a) ? 1 : 0) - (isEntryUsed(b) ? 1 : 0));
+  // 排序策略：
+  //   1. 「所有数据批次」（entries 带 __batch 字段）：先按批次名升序消耗（最早批次优先），
+  //      同批次内再按「未使用在前」
+  //   2. 单批次模式（entries 无 __batch）：直接按「未使用在前」
+  return [...state.entries].sort((a, b) => {
+    const ab = a.__batch || '';
+    const bb = b.__batch || '';
+    if (ab !== bb) return ab < bb ? -1 : 1;   // 早批次在前（批次目录名按时间字符串升序等价于时间升序）
+    return (isEntryUsed(a) ? 1 : 0) - (isEntryUsed(b) ? 1 : 0);
+  });
 }
 
 // ─── 导入数量限位器（依绑定方式） ───
@@ -290,7 +330,7 @@ async function loadBatchUsage() {
 function openBatchList() { $('#batch-list').classList.remove('hidden'); }
 function closeBatchList() { $('#batch-list').classList.add('hidden'); }
 
-/** 渲染批次下拉列表项（含使用情况进度条 + 数字标注） */
+/** 渲染批次下拉列表项（含使用情况进度条 + 数字标注；首项特殊 = 所有数据批次） */
 function renderBatchList() {
   const list = $('#batch-list');
   if (!list) return;
@@ -298,6 +338,34 @@ function renderBatchList() {
   if (!state.batches.length) {
     list.appendChild(el('div', 'batch-item empty', t('list.empty')));
     return;
+  }
+  // 首项：所有数据批次（聚合）
+  {
+    const item = el('div', 'batch-item batch-item-all');
+    if (state.batch === '__all__') item.classList.add('active');
+    const name = el('span', 'batch-name', t('batch.all'));
+    item.appendChild(name);
+    // 聚合使用情况：所有批次的 used 之和 / entries 之和
+    let totalAll = 0, usedAll = 0;
+    for (const b of state.batches) {
+      const u = state.batchUsage[b] || { used: 0, total: 0 };
+      totalAll += u.total; usedAll += u.used;
+    }
+    const unusedAll = Math.max(0, totalAll - usedAll);
+    const unusedPct = totalAll > 0 ? Math.round((unusedAll / totalAll) * 100) : 100;
+    const usage = el('span', 'batch-usage');
+    const bar = el('span', 'batch-bar');
+    const fill = el('span', 'batch-bar-fill');
+    fill.style.width = unusedPct + '%';
+    bar.appendChild(fill);
+    usage.appendChild(bar);
+    usage.appendChild(el('span', 'batch-num', `${unusedAll}/${totalAll}`));
+    item.appendChild(usage);
+    item.addEventListener('click', () => {
+      closeBatchList();
+      if (state.batch !== '__all__') loadBatch('__all__');
+    });
+    list.appendChild(item);
   }
   state.batches.forEach((b) => {
     const item = el('div', 'batch-item');
@@ -311,11 +379,9 @@ function renderBatchList() {
     const usage = el('span', 'batch-usage');
     const bar = el('span', 'batch-bar');
     const fill = el('span', 'batch-bar-fill');
-    // 绿色填充宽度 = 未使用占比；剩余部分由 bar 背景（红色=已使用）透出
     fill.style.width = unusedPct + '%';
-    bar.appendChild(fill);   // 关键：将 fill 挂到 bar 内，绿色覆盖未使用部分
+    bar.appendChild(fill);
 
-    // 数字标注：未用/总数
     const num = el('span', 'batch-num', `${unused}/${u.total}`);
 
     usage.appendChild(bar);
@@ -381,6 +447,100 @@ function renderBindingList() {
   });
 }
 
+/** 抓取进度弹窗（可强制停止）：显示当前轮次 / 已抓条数 / 阶段；用户可点击「停止」 */
+function showFetchProgressModal() {
+  return new Promise((resolve) => {
+    const overlay = $('#dialog-overlay');
+    const title = $('#dialog-title');
+    const body = $('#dialog-body');
+    const actions = $('#dialog-actions');
+
+    title.textContent = t('fetch.progress.title');
+    title.style.color = '#1864ab';
+    title.style.setProperty('::before', '"⏳"');
+
+    body.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'fetch-progress';
+    wrap.style.minWidth = '320px';
+
+    const phase = document.createElement('div');
+    phase.className = 'fetch-progress-phase';
+    phase.textContent = t('fetch.progress.phase.cf');
+    wrap.appendChild(phase);
+
+    const body_ = document.createElement('div');
+    body_.className = 'fetch-progress-body';
+    body_.textContent = t('fetch.progress.body', { round: 1, rounds: 50, collected: 0, target: 0 });
+    wrap.appendChild(body_);
+
+    const bar = document.createElement('div');
+    bar.className = 'fetch-progress-bar';
+    bar.style.cssText = 'margin-top:10px;height:6px;background:#e9ecef;border-radius:3px;overflow:hidden;';
+    const fill = document.createElement('div');
+    fill.style.cssText = 'height:100%;width:0%;background:linear-gradient(90deg,#74c0fc,#339af0);transition:width .25s;';
+    bar.appendChild(fill);
+    wrap.appendChild(bar);
+
+    body.appendChild(wrap);
+
+    // 暴露给进度事件回调更新
+    showFetchProgressModal._update = (p) => {
+      if (!p) return;
+      phase.textContent = t('fetch.progress.phase.' + (p.phase || 'idle'));
+      body_.textContent = t('fetch.progress.body', { round: p.round, rounds: p.rounds, collected: p.collected, target: p.target });
+      const pct = p.target > 0 ? Math.min(100, Math.round((p.collected / p.target) * 100)) : 0;
+      fill.style.width = pct + '%';
+    };
+
+    // 「停止」按钮 → 取消抓取并返回 false
+    actions.innerHTML = '';
+    const stopBtn = document.createElement('button');
+    stopBtn.className = 'dialog-btn-cancel';
+    stopBtn.textContent = t('fetch.progress.stop');
+    stopBtn.addEventListener('click', async () => {
+      stopBtn.disabled = true; stopBtn.textContent = '…';
+      try { await window.api.collectCancel(); } catch {}
+    });
+    actions.appendChild(stopBtn);
+
+    overlay.classList.remove('hidden');
+    // 用户点击遮罩 = 同义停止
+    overlay.onclick = (e) => {
+      if (e.target === overlay) window.api.collectCancel().catch(() => {});
+    };
+    // resolve 由 collectMultiple 调用方在返回时调用
+    showFetchProgressModal._resolve = resolve;
+  });
+}
+
+function closeFetchProgressModal() {
+  const overlay = $('#dialog-overlay');
+  if (overlay) overlay.classList.add('hidden');
+  showFetchProgressModal._update = null;
+  showFetchProgressModal._resolve = null;
+}
+
+// 监听主进程 push 的抓取进度事件（实时更新弹窗）
+if (window.api && window.api.onCollectProgress) {
+  window.api.onCollectProgress((p) => {
+    if (typeof showFetchProgressModal._update === 'function') {
+      showFetchProgressModal._update(p);
+    }
+  });
+}
+
+/** 多轮抓取：循环调用 collect-multiple 直到累计条数达标或被取消；弹窗显示进度，可停止 */
+async function fetchMultipleWithProgress(targetCount, opts = {}) {
+  showFetchProgressModal();
+  try {
+    const res = await window.api.collectMultiple({ targetCount, ...opts });
+    return res;
+  } finally {
+    closeFetchProgressModal();
+  }
+}
+
 /** 同步 binding-label 显示文字（供 i18n 切换时调用） */
 function syncBindingLabel() {
   const val = $('#binding').value;
@@ -419,76 +579,124 @@ function showDialog(opts) {
     };
   });
 }/**
- * 显示导入预览弹窗（滚动列表，每条显示编码→短语映射）。
- * @param {Array<{code:string, word:string, index:number}>} items 预览条目
- * @returns {Promise<{confirmed:boolean, skip:boolean}>} confirmed=确认导入, skip=不再提醒
+ * 通用列表对话框：标题 + 顶部说明 + 可滚动列表 + 「不再提醒」勾选 + 确认/取消。
+ * 替代浏览器原生 confirm()，UI 风格与导入预览一致。
+ * @param {object} opts
+ * @param {string} opts.titleKey 标题 i18n key
+ * @param {string} [opts.bodyKey] 顶部说明 i18n key（多行字符串，可带 {placeholders}）
+ * @param {object} [opts.bodyParams] 顶部说明插值
+ * @param {Array} opts.items 列表项
+ * @param {Function} opts.itemRenderer (it, i) => { code?, word?, order?, arrow?, hint? }
+ * @param {string} opts.confirmKey 确认按钮 i18n key
+ * @param {string} opts.cancelKey 取消按钮 i18n key
+ * @param {string} [opts.skipKey] 「不再提醒」勾选 i18n key（缺省时不显示勾选）
+ * @param {string} [opts.iconColor='#1864ab'] 标题颜色
+ * @returns {Promise<{confirmed:boolean, skip:boolean}>}
  */
-function showImportPreview(items) {
+function showListDialog(opts) {
   return new Promise((resolve) => {
     const overlay = $('#dialog-overlay');
     const title = $('#dialog-title');
     const body = $('#dialog-body');
     const actions = $('#dialog-actions');
 
-    title.textContent = t('dialog.importPreview.title');
-    title.style.color = '#1864ab';
+    title.textContent = t(opts.titleKey);
+    title.style.color = opts.iconColor || '#1864ab';
     title.style.setProperty('::before', '"📋"');
 
-    // 构建可滚动列表
+    body.innerHTML = '';
+    if (opts.bodyKey) {
+      const head = document.createElement('div');
+      head.className = 'preview-header';
+      const bodyText = t(opts.bodyKey, opts.bodyParams || {});
+      bodyText.split('\n').forEach((line, i, arr) => {
+        const div = document.createElement('div');
+        div.textContent = line;
+        head.appendChild(div);
+      });
+      body.appendChild(head);
+    }
+
+    // 列表
     const listEl = document.createElement('div');
     listEl.className = 'preview-list';
-    items.forEach((it) => {
+    (opts.items || []).forEach((it, i) => {
+      const r = opts.itemRenderer(it, i);
       const row = document.createElement('div');
-      row.className = 'preview-item';
-      const codeSpan = document.createElement('span');
-      codeSpan.className = 'preview-code';
-      codeSpan.textContent = it.code || '—';
-      const arrow = document.createElement('span');
-      arrow.className = 'preview-arrow';
-      arrow.textContent = '→';
-      const wordSpan = document.createElement('span');
-      wordSpan.className = 'preview-word';
-      wordSpan.textContent = it.word;
-      const idxSpan = document.createElement('span');
-      idxSpan.className = 'preview-idx';
-      idxSpan.textContent = `第${it.index + 1}位`;
+      row.className = 'preview-item' + (r._isPlaceholder ? ' preview-placeholder' : '');
+      const codeSpan = el('span', 'preview-code', r.code || '—');
       row.appendChild(codeSpan);
-      row.appendChild(idxSpan);
-      row.appendChild(arrow);
-      row.appendChild(wordSpan);
+      if (r.order) {
+        const idxSpan = el('span', 'preview-idx', r.order);
+        row.appendChild(idxSpan);
+      }
+      if (r.arrow) {
+        const arrow = el('span', 'preview-arrow', r.arrow);
+        row.appendChild(arrow);
+      }
+      if (r.word) {
+        const wordSpan = el('span', 'preview-word', r.word);
+        row.appendChild(wordSpan);
+      }
+      if (r.hint) {
+        const hintSpan = el('span', 'preview-hint', r.hint);
+        row.appendChild(hintSpan);
+      }
       listEl.appendChild(row);
     });
-    body.innerHTML = '';
     body.appendChild(listEl);
 
-    // "此后不再提醒" 勾选框
-    const skipWrap = document.createElement('label');
-    skipWrap.className = 'preview-skip-wrap';
-    const skipCb = document.createElement('input');
-    skipCb.type = 'checkbox';
-    skipCb.id = 'preview-skip-cb';
-    const skipLabel = document.createElement('span');
-    skipLabel.textContent = t('dialog.importPreview.skip');
-    skipWrap.appendChild(skipCb);
-    skipWrap.appendChild(skipLabel);
+    // 「不再提醒」勾选
     actions.innerHTML = '';
-    actions.appendChild(skipWrap);
+    let skipCb = null;
+    if (opts.skipKey) {
+      // 复选框 + label 用独立元素实现（方便像「记住我的选择」一样微调样式）
+      const skipWrap = document.createElement('div');
+      skipWrap.className = 'preview-skip-wrap';
+      skipCb = document.createElement('input');
+      skipCb.type = 'checkbox';
+      skipCb.id = 'preview-skip-cb-' + Math.random().toString(36).slice(2, 8);  // 避免与其他对话框冲突
+      skipCb.className = 'preview-skip-cb';
+      const skipLabel = document.createElement('label');
+      skipLabel.className = 'preview-skip-label';
+      skipLabel.setAttribute('for', skipCb.id);
+      skipLabel.textContent = t(opts.skipKey);
+      skipWrap.appendChild(skipCb);
+      skipWrap.appendChild(skipLabel);
+      actions.appendChild(skipWrap);
+    }
 
     const btnOk = document.createElement('button');
     btnOk.className = 'dialog-btn-primary';
-    btnOk.textContent = t('dialog.importPreview.confirm');
-    btnOk.addEventListener('click', () => { overlay.classList.add('hidden'); resolve({ confirmed: true, skip: skipCb.checked }); });
+    btnOk.textContent = t(opts.confirmKey);
+    btnOk.addEventListener('click', () => { overlay.classList.add('hidden'); resolve({ confirmed: true, skip: skipCb ? skipCb.checked : false }); });
     const btnCancel = document.createElement('button');
     btnCancel.className = 'dialog-btn-cancel';
-    btnCancel.textContent = t('dialog.importPreview.cancel');
-    btnCancel.addEventListener('click', () => { overlay.classList.add('hidden'); resolve({ confirmed: false, skip: skipCb.checked }); });
+    btnCancel.textContent = t(opts.cancelKey);
+    btnCancel.addEventListener('click', () => { overlay.classList.add('hidden'); resolve({ confirmed: false, skip: skipCb ? skipCb.checked : false }); });
     actions.appendChild(btnCancel);
     actions.appendChild(btnOk);
 
     overlay.classList.remove('hidden');
     overlay.onclick = (e) => {
-      if (e.target === overlay) { overlay.classList.add('hidden'); resolve({ confirmed: false, skip: skipCb.checked }); }
+      if (e.target === overlay) { overlay.classList.add('hidden'); resolve({ confirmed: false, skip: skipCb ? skipCb.checked : false }); }
     };
+  });
+}
+
+/**
+ * 显示导入预览弹窗（滚动列表，每条显示编码→候选位置→短语映射）。
+ * @param {Array<{code:string, word:string, order:number}>} items 预览条目
+ * @returns {Promise<{confirmed:boolean, skip:boolean}>} confirmed=确认导入, skip=不再提醒
+ */
+function showImportPreview(items) {
+  return showListDialog({
+    titleKey: 'dialog.importPreview.title',
+    items,
+    itemRenderer: (it) => ({ code: it.code || '—', order: `第${it.order}位`, arrow: '→', word: it.word || '?' }),
+    confirmKey: 'dialog.importPreview.confirm',
+    cancelKey: 'dialog.importPreview.cancel',
+    skipKey: 'dialog.importPreview.skip',
   });
 }
 
@@ -586,7 +794,9 @@ function renderStats() {
 async function refreshBatches(selectBatch) {
   const batches = await window.api.batches();
   state.batches = batches;
-  if (!batches.length) {
+  // __all__ 是聚合模式，不在 batches 列表内，单独接受
+  const isAllSelect = selectBatch === '__all__';
+  if (!batches.length && !isAllSelect) {
     state.batch = null;
     $('#batch-label').textContent = '—';
     renderBatchList();
@@ -594,12 +804,14 @@ async function refreshBatches(selectBatch) {
     return false;
   }
   // 明确指定了批次（config.yaml 记录的 lastBatch 或抓取新建批次）且该批次仍存在
-  if (selectBatch && batches.includes(selectBatch)) {
-    state.batch = selectBatch;
-    $('#batch-label').textContent = selectBatch;
+  // __all__ 视为合法的「选中」状态：只要存在任意批次即可加载（聚合所有）
+  if (isAllSelect || (selectBatch && batches.includes(selectBatch))) {
+    const target = isAllSelect ? '__all__' : selectBatch;
+    state.batch = target;
+    $('#batch-label').textContent = isAllSelect ? t('batch.all') : target;
     await loadBatchUsage();
     renderBatchList();
-    await loadBatch(selectBatch);
+    await loadBatch(target);
     return true;
   }
   // 指定了批次但该批次已丢失/异常 → 不自动加载任何批次，等待用户手动选择
@@ -621,14 +833,28 @@ async function refreshBatches(selectBatch) {
 }
 
 async function loadBatch(batch) {
-  const { entries, used } = await window.api.loadBatch({ batch });
+  const data = await window.api.loadBatch({ batch });
   state.batch = batch;
-  state.entries = entries || [];
-  state.used = new Set(used || []);
+  state.entries = data.entries || [];
+  state.used = new Set(data.used || []);
+  // __all__ 模式：从每条 entry 的 __batch 标签建立 usedKey → 批次 的映射（用于导入/撤回按源批次回写）
+  state.__allKeyToBatch = null;
+  if (batch === '__all__') {
+    state.__allKeyToBatch = new Map();
+    for (const e of state.entries) {
+      const k = e.kanji || e.raw || '';
+      if (k && e.__batch && !state.__allKeyToBatch.has(k)) {
+        state.__allKeyToBatch.set(k, e.__batch);
+      }
+    }
+  }
   // 别名仅内存、按需求不持久化，切批次清空；手动绑定(batchBindings)跨批次保留，不清空
   state.aliases = {};
   renderList(); renderStats();
-  setStatusBar(t('msg.batchLoaded', { batch, n: state.entries.length }), 'ok');
+  $('#batch-label').textContent = batch === '__all__' ? t('batch.all') : batch;
+  setStatusBar(batch === '__all__'
+    ? t('msg.batchLoadedAll', { n: state.entries.length, batches: data.batches ? data.batches.length : 0 })
+    : t('msg.batchLoaded', { batch, n: state.entries.length }), 'ok');
   // 记录当前打开的数据批次到 config.yaml（下次启动据此自动恢复）
   window.api.saveConfig({ lastBatch: batch }).catch(() => {});
 }
@@ -671,6 +897,39 @@ async function autoFetch() {
   }
 }
 
+/**
+ * 在「所有数据批次」耗尽时调用：自动抓取一批新名字并刷新批次列表。
+ * 抓取成功 → 重新加载 __all__ 聚合视图，返回 true；
+ * 抓取失败 → 返回 false（弹窗已给出错误提示）。
+ */
+async function tryAutoFetch() {
+  setStatusBar(t('msg.cfChallenge'));
+  try {
+    const { cookie, html } = await window.api.autoCf({ url: buildTargetUrl() });
+    let result;
+    if (html && html.length > 500) {
+      setStatusBar(t('msg.parsing'));
+      result = await window.api.collectFromHtml({ html });
+    } else {
+      result = await window.api.collect({
+        cookie, gender: $('#gender').value, popularity: $('#popularity').value,
+      });
+    }
+    // 抓取后：刷新 batches 列表，并按当前 batch 类型重新加载
+    if (state.batch === '__all__') {
+      // 重新聚合所有批次
+      await loadBatch('__all__');
+      renderList(); renderStats(); refreshBatchUsage();
+    } else {
+      await refreshBatches(result.batch);
+    }
+    return true;
+  } catch (e) {
+    setStatusBar(t('msg.fetchFail', { err: e.message || e }), 'err');
+    return false;
+  }
+}
+
 function renderList() {
   const list = $('#list');
   list.innerHTML = '';
@@ -697,7 +956,7 @@ function renderList() {
     light.addEventListener('click', () => {
       if (state.used.has(key)) state.used.delete(key);
       else state.used.add(key);
-      persistUsed();
+      persistUsed().catch(() => {});
       renderList(); renderStats();
       refreshBatchUsage();  // 实时更新批次使用情况进度条
     });
@@ -855,28 +1114,73 @@ function renderList() {
 
 // ─── 一键导入 ───
 
-async function doImport() {
-  if (!state.entries.length) { setStatusBar(t('msg.noImport'), 'err'); return; }
+async function doImport(allowRefetch = true) {
+  if (!state.entries.length) {
+    // __all__ 模式下若还没数据，先尝试抓一次
+    if (state.batch === '__all__') {
+      const fetched = await tryAutoFetch();
+      if (!fetched) { setStatusBar(t('msg.noImport'), 'err'); return; }
+    } else {
+      setStatusBar(t('msg.noImport'), 'err'); return;
+    }
+  }
   let count = Math.max(1, parseInt($('#count').value, 10) || 10);
-  // 按绑定方式限位器钳制（手动 9999 / 英文键位顺序 24 / 流转顺序 12）
+  // 按绑定方式限位器钳制（手动 9999 / 英文键位顺序 26 / 流转顺序 12）
   const limit = currentLimit();
   if (count > limit) { count = limit; $('#count').value = count; persistConfig(); }
 
-  const view = sortedView();
+  // ⚠️ __all__ 模式：仅取「未使用」条目 —— 一键导入不复用已使用数据；
+  //    若 count > 未用数量，由下方占位预览 + 多轮抓取补足。
+  let view = (state.batch === '__all__')
+    ? sortedView().filter((e) => !isEntryUsed(e))
+    : sortedView();
   const slice = view.slice(0, count);
   const usedInSlice = slice.filter((e) => isEntryUsed(e));
 
   if (usedInSlice.length > 0) {
     const unusedTotal = view.length - view.filter((e) => isEntryUsed(e)).length;
     if (unusedTotal > 0) {
-      const ok = confirm(t('confirm.usedInSlice', {
-        count, used: usedInSlice.length, adj: Math.min(count, unusedTotal),
-      }));
-      if (!ok) { setStatusBar(t('msg.cancelled')); return; }
-      count = Math.min(count, unusedTotal);
-      $('#count').value = count;
-      persistConfig();
+      // __all__ 模式：不调整导入数量；保持 count 不变，缺数据时由下方占位预览 + 多轮抓取流程补足
+      if (state.batch !== '__all__') {
+        // 检查「不再提醒」
+        let cfgSkip = false;
+        try {
+          const cfgTmp = await window.api.loadConfig();
+          cfgSkip = !!(cfgTmp && cfgTmp.skipUsedInSlice);
+        } catch { /* 忽略 */ }
+        if (!cfgSkip) {
+          const previewItems = usedInSlice.map((e) => ({
+            code: e.kanji || e.raw || '?',
+            word: '',
+            order: t('dialog.usedInSlice.rowTag'),
+          }));
+          const res = await showListDialog({
+            titleKey: 'dialog.usedInSlice.title',
+            bodyKey: 'dialog.usedInSlice.body',
+            bodyParams: { count, used: usedInSlice.length, adj: Math.min(count, unusedTotal) },
+            items: previewItems,
+            itemRenderer: (it) => ({ code: it.code, word: '' }),
+            confirmKey: 'dialog.usedInSlice.confirm',
+            cancelKey: 'dialog.usedInSlice.cancel',
+            skipKey: 'dialog.usedInSlice.skip',
+          });
+          if (!res.confirmed) { setStatusBar(t('msg.cancelled')); return; }
+          if (res.skip) {
+            window.api.saveConfig({ skipUsedInSlice: true }).catch(() => {});
+          }
+        }
+        count = Math.min(count, unusedTotal);
+        $('#count').value = count;
+        persistConfig();
+      }
     } else {
+      // 数据全部使用过：__all__ 模式自动抓取填补，其他模式沿用原有确认弹窗
+      if (state.batch === '__all__') {
+        const fetched = await tryAutoFetch();
+        if (!fetched) { setStatusBar(t('msg.cancelled')); return; }
+        // 抓取后状态已刷新，递归重试一次
+        return doImport();
+      }
       const ok = confirm(t('confirm.allUsed', { count }));
       if (!ok) { setStatusBar(t('msg.cancelled')); return; }
     }
@@ -905,7 +1209,7 @@ async function doImport() {
       if (action === 'cancel') { setStatusBar(t('msg.cancelled')); return; }
       if (action === 'autoQwerty') {
         // 将未绑定的行自动分配 qwerty 编码并持久化
-        const qwertySeq = 'qwertyuiopasdfghjklzxcvb';
+        const qwertySeq = 'qwertyuiopasdfghjklzxcvbnm';
         let assignIdx = 0;
         sliceForCheck.forEach((e) => {
           const row = origIndex.get(e);
@@ -952,38 +1256,156 @@ async function doImport() {
   });
   config.lockedBindings = lockedBindings;
 
-  // ── 自动模式：先检测候选位置冲突，让用户确认后再导入 ──
-  if (config.orderMode === 'auto') {
-    try {
-      setStatusBar(t('msg.checkingConflict'));
-      const resolveRes = await window.api.resolveOrders({ config, entries: view, aliases });
-      if (resolveRes.adjustments && resolveRes.adjustments.length > 0) {
-        const lines = resolveRes.adjustments.map((a) =>
-          t('line.orderAdjust', { code: a.code, word: a.word, from: a.fromOrder, to: a.toOrder })
-        ).join('\n');
-        const ok = confirm(t('confirm.orderAdjust', { n: resolveRes.adjustments.length, lines }));
-        if (!ok) { setStatusBar(t('msg.cancelled')); return; }
-      }
-      // 无冲突时静默继续
-    } catch (e) {
-      // 冲突检测失败不阻断导入，回退到固定模式行为
-      setStatusBar(t('msg.conflictFail', { err: e.message }), 'err');
-      config.orderMode = 'fixed';
-    }
-  }
-
-  // ── 导入预览：展示每条编码→短语映射，用户确认后才实际导入 ──
   const pField = $('#phraseField').value;
   const bindingVal = $('#binding').value;
+
+  // ── __all__ 模式且数量不足：先显示占位预览（黄色"确认后生成"），用户确认后多轮抓取，再二次预览导入 ──
+  //    ⚠️ 该流程必须位于冲突检测（即将覆盖）之前：抓取完成后 view 已刷新，
+  //    后续冲突检测与导入预览都基于最新数据。
+  if (allowRefetch && state.batch === '__all__' && count > view.length) {
+    const placeholderItems = [];
+    for (let i = 0; i < count; i++) {
+      let code = '';
+      if (bindingVal === 'qwerty') code = 'qwertyuiopasdfghjklzxcvbnm'[i] || '';
+      else if (bindingVal === 'qwerFlow') code = 'qwerasdfzxcv'[i] || '';
+      else if (i < view.length) {
+        const e0 = view[i];
+        const row0 = origIndex.get(e0);
+        const b0 = getRowBinding(row0, { noGlobalFallback: true });
+        code = (b0 && b0.identifier) || '';
+      }
+      const ord = (config.orderMode === 'fixed' ? config.orderValue : (i + 1));
+      const w = (i < view.length) ? (view[i][pField] || view[i].kanji || view[i].raw || '?') : t('fetch.progress.placeholder');
+      placeholderItems.push({ code: code || '—', word: w, order: `第${ord}位`, _isPlaceholder: i >= view.length });
+    }
+    // 跳过「不再提醒」检查
+    let cfgSkip = false;
+    try {
+      const cfgTmp = await window.api.loadConfig();
+      cfgSkip = !!(cfgTmp && cfgTmp.skipImportPreview);
+    } catch { /* 忽略 */ }
+    let placeholderConfirmed = true;
+    if (!cfgSkip) {
+      const res = await showListDialog({
+        titleKey: 'dialog.importPreview.title',
+        bodyKey: 'dialog.importPreview.placeholderBody',
+        bodyParams: { total: count, known: view.length, need: count - view.length },
+        items: placeholderItems,
+        itemRenderer: (it) => ({ code: it.code, word: it.word, order: it.order, _isPlaceholder: it._isPlaceholder }),
+        confirmKey: 'dialog.importPreview.confirm',
+        cancelKey: 'dialog.importPreview.cancel',
+        skipKey: 'dialog.importPreview.skip',
+      });
+      placeholderConfirmed = res.confirmed;
+      if (res.skip) window.api.saveConfig({ skipImportPreview: true }).catch(() => {});
+    }
+    if (!placeholderConfirmed) { setStatusBar(t('msg.cancelled')); return; }
+
+    // 用户确认占位预览 → 触发多轮抓取（带进度弹窗 + 强制停止）
+    const need = count - view.length;
+    const fetched = await fetchMultipleWithProgress(need, {
+      gender: $('#gender').value, popularity: $('#popularity').value, url: buildTargetUrl(),
+    });
+    if (!fetched || fetched.cancelled) {
+      setStatusBar(t('msg.cancelled')); return;
+    }
+    if (!fetched.entries || fetched.entries.length === 0) {
+      setStatusBar(t('msg.fetchFail', { err: '0 entries' }), 'err'); return;
+    }
+    // 抓取成功 → 重新聚合所有批次（含新批次）→ 递归 doImport（数据已足够，会走真实预览）
+    await loadBatch('__all__');
+    renderList(); renderStats(); refreshBatchUsage();
+    // allowRefetch=false：递归时即使仍不足也不再抓（避免死循环），直接按现有数据继续
+    return doImport(false);
+  }
+
+  // ── 冲突检测（auto + fixed 模式都跑）：让用户确认后再导入 ──
+  let fixedOverwriteCount = 0;
+  try {
+    setStatusBar(t('msg.checkingConflict'));
+    const resolveRes = await window.api.resolveOrders({ config, entries: view, aliases });
+    if (config.orderMode === 'auto') {
+      // auto：自动避让后的调整清单
+      if (resolveRes.adjustments && resolveRes.adjustments.length > 0) {
+        // 检查「不再提醒」
+        let cfgSkip = false;
+        try {
+          const cfgTmp = await window.api.loadConfig();
+          cfgSkip = !!(cfgTmp && cfgTmp.skipOrderAdjust);
+        } catch { /* 忽略 */ }
+        if (!cfgSkip) {
+          const items = resolveRes.adjustments.map((a) => ({
+            code: a.code,
+            word: a.word,
+            order: `${a.fromOrder}→${a.toOrder}`,
+          }));
+          const res = await showListDialog({
+            titleKey: 'dialog.conflict.title',
+            bodyKey: 'dialog.conflict.body',
+            bodyParams: { n: resolveRes.adjustments.length },
+            items,
+            itemRenderer: (it) => ({ code: it.code, word: it.word, order: `第${it.order}位`, arrow: '→' }),
+            confirmKey: 'dialog.conflict.confirm',
+            cancelKey: 'dialog.conflict.cancel',
+            skipKey: 'dialog.conflict.skip',
+          });
+          if (!res.confirmed) { setStatusBar(t('msg.cancelled')); return; }
+          if (res.skip) window.api.saveConfig({ skipOrderAdjust: true }).catch(() => {});
+        }
+      }
+    } else {
+      // fixed：冲突 = 即将覆盖现有同 code+order 的词条，提示用户确认
+      fixedOverwriteCount = (resolveRes.adjustments && resolveRes.adjustments.length) || 0;
+      if (fixedOverwriteCount > 0) {
+        // 检查「不再提醒」
+        let cfgSkip = false;
+        try {
+          const cfgTmp = await window.api.loadConfig();
+          cfgSkip = !!(cfgTmp && cfgTmp.skipOrderOverwrite);
+        } catch { /* 忽略 */ }
+        if (!cfgSkip) {
+          const items = resolveRes.adjustments.map((a) => ({
+            code: a.code,
+            word: a.word,
+            order: `第${a.fromOrder}位`,
+          }));
+          const res = await showListDialog({
+            titleKey: 'dialog.orderOverwrite.title',
+            bodyKey: 'dialog.orderOverwrite.body',
+            bodyParams: { n: fixedOverwriteCount, order: config.orderValue },
+            items,
+            itemRenderer: (it) => ({ code: it.code, word: it.word, order: it.order, arrow: '·' }),
+            confirmKey: 'dialog.orderOverwrite.confirm',
+            cancelKey: 'dialog.orderOverwrite.cancel',
+            skipKey: 'dialog.orderOverwrite.skip',
+          });
+          if (!res.confirmed) { setStatusBar(t('msg.cancelled')); return; }
+          if (res.skip) window.api.saveConfig({ skipOrderOverwrite: true }).catch(() => {});
+        }
+      }
+    }
+    // 把解析后的真实候选位置缓存在 state 供预览使用
+    state._resolvedRecords = resolveRes.records || null;
+  } catch (e) {
+    setStatusBar(t('msg.conflictFail', { err: e.message }), 'err');
+    config.orderMode = 'fixed';
+    state._resolvedRecords = null;
+  }
+
   const previewItems = view.slice(0, count).map((e, i) => {
     let code = lockedBindings[i] || '';
     // 非手动模式：显示该绑定方式实际分配的键位编码
     if (!code && bindingVal !== 'manual' && bindingVal !== 'manualGlobal') {
-      if (bindingVal === 'qwerty') code = 'qwertyuiopasdfghjklzxcvb'[i] || '';
+      if (bindingVal === 'qwerty') code = 'qwertyuiopasdfghjklzxcvbnm'[i] || '';
       else if (bindingVal === 'qwerFlow') code = 'qwerasdfzxcv'[i] || '';
     }
-    return { code: code || '—', word: e[pField] || e.kanji || e.raw || '?', index: i };
+    // 候选位置：fixed 模式统一用 orderValue；auto 模式用冲突解析后的真实 order；
+    //              回退到 i+1（与原逻辑一致）
+    const order = (state._resolvedRecords && state._resolvedRecords[i] && state._resolvedRecords[i].order)
+      || (config.orderMode === 'fixed' ? config.orderValue : (i + 1));
+    return { code: code || '—', word: e[pField] || e.kanji || e.raw || '?', order, _isPlaceholder: false };
   });
+  state._resolvedRecords = null;
 
   // 检查是否已勾选"不再提醒"
   let cfgSkip = false;
@@ -1018,13 +1440,15 @@ async function doImport() {
     state.lastImportInfo = { usedKeysAdded: keysToAdd, backupPath: res.backupPath, backups: res.backups };
     btnUndo.disabled = false;
 
-    // 根据重载结果显示不同状态信息
+    // 根据重载结果显示不同状态信息（默认精简，仅开发者模式显示完整路径）
     const files = [res.eudpTarget, res.udlTarget, res.legacyTarget].filter(Boolean).join(' + ');
     if (res.reloaded && res.reloaded.killedChsIME) {
-      setStatusBar(t('msg.importOk', { n: res.records.length, files }), 'ok');
+      setStatusSmart('msg.importOk.simple', { n: res.records.length },
+                     'msg.importOk.full', { n: res.records.length, files });
     } else {
       const method = res.reloaded?.method || 'unknown';
-      setStatusBar(t('msg.importPartial', { n: res.records.length, files, method }), 'err');
+      setStatusSmart('msg.importPartial.simple', { n: res.records.length },
+                     'msg.importPartial.full', { n: res.records.length, files, method });
     }
   } catch (e) {
     setStatusBar(t('msg.importFail', { err: e.message || e }), 'err');
@@ -1036,7 +1460,26 @@ async function doImport() {
 // ─── 一键清除 ───
 
 async function doClear() {
-  const ok = confirm(t('confirm.clear'));
+  // ⚠️ 与「导入预览」相同样式的应用内确认框（含「此后不再提醒」），替代浏览器原生 confirm
+  let cfgSkip = false;
+  try {
+    const cfgTmp = await window.api.loadConfig();
+    cfgSkip = !!(cfgTmp && cfgTmp.skipClearConfirm);
+  } catch { /* 忽略 */ }
+  let ok = true;
+  if (!cfgSkip) {
+    const res = await showListDialog({
+      titleKey: 'dialog.clearConfirm.title',
+      bodyKey: 'dialog.clearConfirm.body',
+      items: [],
+      itemRenderer: () => ({}),
+      confirmKey: 'dialog.clearConfirm.confirm',
+      cancelKey: 'dialog.clearConfirm.cancel',
+      skipKey: 'dialog.clearConfirm.skip',
+    });
+    ok = res.confirmed;
+    if (res.skip) window.api.saveConfig({ skipClearConfirm: true }).catch(() => {});
+  }
   if (!ok) return;
 
   const btn = $('#btn-clear');
@@ -1045,10 +1488,12 @@ async function doClear() {
   try {
     const res = await window.api.clearIme();
     if (res.reloaded && res.reloaded.killedChsIME) {
-      setStatusBar(t('msg.clearOk', { n: res.originalCount, target: res.target }), 'ok');
+      setStatusSmart('msg.clearOk.simple', { n: res.originalCount },
+                     'msg.clearOk.full', { n: res.originalCount, target: res.target });
     } else {
       const method = res.reloaded?.method || 'unknown';
-      setStatusBar(t('msg.clearPartial', { n: res.originalCount, method }), 'err');
+      setStatusSmart('msg.clearPartial.simple', { n: res.originalCount },
+                     'msg.clearPartial.full', { n: res.originalCount, method });
     }
     state.lastImportInfo = { usedKeysAdded: [], backupPath: res.backupPath, backups: res.backups, wasClear: true };
     $('#btn-undo').disabled = false;
@@ -1085,10 +1530,12 @@ async function doUndo() {
     renderList(); renderStats();
     refreshBatchUsage();  // 实时更新批次使用情况进度条
     if (res.reloaded && res.reloaded.killedChsIME) {
-      setStatusBar(t('msg.undoOk', { target: res.target }), 'ok');
+      setStatusSmart('msg.undoOk.simple', null,
+                     'msg.undoOk.full', { target: res.target });
     } else {
       const method = res.reloaded?.method || 'unknown';
-      setStatusBar(t('msg.undoPartial', { target: res.target, method }), 'err');
+      setStatusSmart('msg.undoPartial.simple', null,
+                     'msg.undoPartial.full', { target: res.target, method });
     }
   } catch (e) {
     setStatusBar(t('msg.undoFail', { err: e.message || e }), 'err');
@@ -1170,6 +1617,14 @@ $('#api-doc-link')?.addEventListener('click', (e) => {
   e.preventDefault();
   const url = e.currentTarget.dataset.url;
   if (url) window.api.openExternal({ path: url }).catch(() => {});
+});
+
+// 开发者提示模式开关：切换时立即生效 + 持久化
+$('#set-devmode')?.addEventListener('change', async (e) => {
+  const enabled = !!e.target.checked;
+  state.config = state.config || {};
+  state.config.devMode = enabled;
+  try { await window.api.saveConfig({ devMode: enabled }); } catch {}
 });
 
 // 点击「关于」窗口中的 GitHub 链接 → 在系统默认浏览器中打开
@@ -1359,6 +1814,7 @@ $('#btn-pin').addEventListener('click', async () => {
     const res = await window.api.toggleAlwaysOnTop();
     $('#btn-pin').classList.toggle('pin-active', !!res.pinned);
     window.api.saveConfig({ pinned: !!res.pinned }).catch(() => {});
+    if (res.pinned) syncShortcutsToMain();   // 置顶开启：把当前 enabled 快捷键上报主进程供 globalShortcut 注册
     setStatusBar(res.pinned ? t('msg.pinned') : t('msg.unpinned'), 'ok');
   } catch {
     setStatusBar(t('msg.pinFail'), 'err');
@@ -1372,9 +1828,19 @@ $('#btn-hide-status').addEventListener('click', () => {
 });
 
 // 批次下拉：点击按钮展开/收起；点击外部收起
-$('#batch-btn').addEventListener('click', () => {
-  if ($('#batch-list').classList.contains('hidden')) { renderBatchList(); openBatchList(); }
-  else closeBatchList();
+$('#batch-btn').addEventListener('click', async () => {
+  if ($('#batch-list').classList.contains('hidden')) {
+    // ⚠️ 每次展开都主动从主进程读取最新批次列表 + 使用情况，避免被动刷新导致新批次不显示
+    try {
+      const batches = await window.api.batches();
+      state.batches = batches;
+      await loadBatchUsage();
+    } catch { /* 读取失败则沿用缓存 */ }
+    renderBatchList();
+    openBatchList();
+  } else {
+    closeBatchList();
+  }
 });
 document.addEventListener('mousedown', (e) => {
   const wrap = document.querySelector('.batch-select');
@@ -1461,11 +1927,31 @@ function comboFromEvent(e) {
   return [...mods, key].join('+');
 }
 
+/** 把当前 enabled 快捷键同步到主进程（置顶时主进程会注册为 globalShortcut） */
+function syncShortcutsToMain() {
+  try {
+    const sc = state.shortcuts || defaultShortcuts();
+    const list = SHORTCUT_ACTIONS
+      .filter((a) => sc[a.key] && sc[a.key].enabled && sc[a.key].combo)
+      .map((a) => ({ combo: sc[a.key].combo, action: a.key, enabled: true }));
+    window.api.setGlobalShortcuts({ shortcuts: list }).catch(() => {});
+  } catch { /* 静默 */ }
+}
+
+/** 监听主进程通过 globalShortcut 触发的快捷键动作（来自 webContents.send('trigger-shortcut')） */
+if (window.api && window.api.onTriggerShortcut) {
+  window.api.onTriggerShortcut(({ action } = {}) => {
+    const a = SHORTCUT_ACTIONS.find((x) => x.key === action);
+    if (a) a.fn();
+  });
+}
+
 /** 读取并缓存快捷键配置（缺失时回退默认） */
 async function loadShortcuts() {
   try { state.shortcuts = (await window.api.shortcutsLoad()) || defaultShortcuts(); }
   catch { state.shortcuts = defaultShortcuts(); }
   renderShortcuts();
+  syncShortcutsToMain();
 }
 
 function persistShortcuts() {
@@ -1516,6 +2002,7 @@ function toggleShortcut(key) {
   sc[key].enabled = !sc[key].enabled;
   persistShortcuts();
   renderShortcuts();
+  syncShortcutsToMain();
 }
 
 // 全局快捷键：按用户自定义组合键触发（最多 3 键），支持录制与禁用
@@ -1537,6 +2024,7 @@ document.addEventListener('keydown', (e) => {
     sc[key] = { combo, enabled: true };
     persistShortcuts();
     renderShortcuts();
+    syncShortcutsToMain();
     setStatusBar(t('shortcut.captured', { combo }), 'ok');
     return;
   }
@@ -1707,6 +2195,8 @@ function initTooltips() {
 async function initApp() {
   let cfg = null;
   try { cfg = await window.api.loadConfig(); } catch { /* 默认值 */ }
+  // 缓存到 state 供 devModeOn() 等读取（含 devMode/apiEnabled/...）
+  state.config = cfg || {};
 
   // 先填充语言下拉，保证 applyConfigToUi 能正确选中当前语言
   await populateLangSelect();
