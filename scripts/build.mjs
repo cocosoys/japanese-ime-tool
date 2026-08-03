@@ -14,6 +14,24 @@ import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import { build } from 'electron-builder';
 
+// ── 构建环境：GitHub 镜像 + 关闭签名自动发现 ──────────────────────────────
+// 1) ELECTRON_BUILDER_BINARIES_MIRROR：
+//    electron-builder 构建时需从 GitHub 下载辅助二进制（NSIS / 7zip / winCodeSign 等），
+//    直连 GitHub 经常 ETIMEDOUT。改用 gh.xmly.dev 镜像（保留 release tag 目录结构，
+//    拼接逻辑见 electronGet.js 的 getBinariesMirrorUrl：mirror + "/<tag>/<file>"）。
+//    ⚠ 不能用 OVERRIDE_URL：它会丢掉 tag 目录导致 404。
+//    仅本地构建生效；CI 环境（CI=true）保持直连 GitHub（runner 网络可达）。
+// 2) 注意：不要对 electron 运行时本身设置镜像（ELECTRON_MIRROR）。gh.xmly.dev 代理
+//    不返回 electron 的 .sha256sum 校验和文件，会导致 404。electron 走默认直连即可。
+// 3) CSC_IDENTITY_AUTO_DISCOVERY=false：构建阶段不自动签名（签名由
+//    scripts/local-release/release.mjs 或 CI 单独步骤完成），避免无证书时下载
+//    winCodeSign，并保证本地/CI 构建行为一致。
+const GH_MIRROR = 'https://gh.xmly.dev/https://github.com/electron-userland/electron-builder-binaries/releases/download';
+if (!process.env.CI && !process.env.ELECTRON_BUILDER_BINARIES_MIRROR) {
+  process.env.ELECTRON_BUILDER_BINARIES_MIRROR = GH_MIRROR;
+}
+process.env.CSC_IDENTITY_AUTO_DISCOVERY = 'false';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
@@ -42,10 +60,13 @@ async function buildTarget(target) {
   log(`构建 ${target} → ${rel(outBase)}`);
   await build({
     projectDir: root,
-    // 关闭 electron-builder 在 CI 下的隐式发布：
+    // 关闭 electron-builder 的隐式发布：
     // 发布改由 GitHub Action（auto-release + upload-release-asset）负责，
-    // 否则 electron-builder 检测到 CI 会尝试用 GH_TOKEN 自动发布而缺少 token 报错。
-    publish: false,
+    // 否则 electron-builder 在 CI / 本地检测到 GH_TOKEN 或 CI 环境时会自动尝试
+    // 发布到 GitHub Releases 而缺少 token 报错。
+    // 注意：必须用字符串 "never"，不能写 false —— electron-builder 的判定里
+    // `false != null` 为 true，会把 false 当成“有发布策略”而继续发布。
+    publish: "never",
     config: {
       ...pkgBuild,
       directories: { ...(pkgBuild.directories || {}), output: outBase },
