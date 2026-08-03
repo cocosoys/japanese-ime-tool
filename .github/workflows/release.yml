@@ -1,10 +1,12 @@
-name: Build and Release (auto-release)
+name: Build and Release
 
-# 自动发布方法（基于 CupOfTea696/gh-action-auto-release）：
+# 自动发布方法（原生 gh CLI，不依赖第三方 Action，避免 Node 24 不兼容问题）：
 # 当 push 到 main 的 commit message 形如 "Release: x.y.z" 时，
 #  1) 在 Windows 上构建 NSIS 安装版 + 便携版 + app-x.y.z.asar（输出到 release/x.y.z/）
-#  2) auto-release 按 commit 版本号自动创建 GitHub Release（描述取自 CHANGELOG.md 对应小节）
-#  3) 通过 auto-release 输出的 upload_url，把三件套 + version.json 上传为 Release 资产
+#  2) 用 gh release create 按 commit 版本号自动创建 GitHub Release
+#     - 描述取自 CHANGELOG.md 中 "## v<x.y.z>" 小节（找不到则自动生成）
+#     - 把三件套 + version.json 上传为 Release 资产
+#  3) 步骤幂等：重跑时若同名 release/tag 已存在会先清理，便于修复后重新发布
 #
 # 触发一次发布的本地操作：
 #   修改 package.json 的 version 与 CHANGELOG.md
@@ -22,10 +24,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -54,57 +56,35 @@ jobs:
             exit 1
           fi
 
-      - name: Auto Release (create release from commit + CHANGELOG)
-        id: auto_release
-        uses: CupOfTea696/gh-action-auto-release@v1.0.0
-        with:
-          title: "Release: $version"
-          tag: "v$semver"
-          draft: false
-          regex: "/^Release: #{semver}$/i"
+      - name: Create Release & upload assets
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER="${{ steps.vars.outputs.VERSION }}"
+          echo "Releasing version: $VER"
 
-      - name: Upload Setup (NSIS)
-        if: steps.auto_release.outputs.released == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.auto_release.outputs.upload_url }}
-          asset_path: release/${{ steps.vars.outputs.VERSION }}/JapaneseImeTool Setup ${{ steps.vars.outputs.VERSION }}.exe
-          asset_name: JapaneseImeTool Setup ${{ steps.vars.outputs.VERSION }}.exe
-          asset_content_type: application/octet-stream
+          # 从 CHANGELOG.md 抽取 "## v<x.y.z>" 小节作为 Release 描述
+          awk "/^## v${VER}/{f=1;next} /^## /{if(f)exit} f" CHANGELOG.md > /tmp/notes.md
+          if [ -s /tmp/notes.md ]; then
+            echo "使用 CHANGELOG.md 中 ## v${VER} 小节作为描述"
+            NOTES=(--notes-file /tmp/notes.md)
+          else
+            echo "未找到 CHANGELOG 对应小节，改用自动生成描述"
+            NOTES=(--generate-notes)
+          fi
 
-      - name: Upload Portable
-        if: steps.auto_release.outputs.released == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.auto_release.outputs.upload_url }}
-          asset_path: release/${{ steps.vars.outputs.VERSION }}/JapaneseImeTool Portable ${{ steps.vars.outputs.VERSION }}.exe
-          asset_name: JapaneseImeTool Portable ${{ steps.vars.outputs.VERSION }}.exe
-          asset_content_type: application/octet-stream
+          TAG="v${VER}"
+          # 幂等清理：重跑时若已存在同名 release/tag 先删除
+          gh release delete "$TAG" --yes 2>/dev/null || true
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/$TAG" 2>/dev/null || true
 
-      - name: Upload asar (in-app update payload)
-        if: steps.auto_release.outputs.released == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.auto_release.outputs.upload_url }}
-          asset_path: release/${{ steps.vars.outputs.VERSION }}/app-${{ steps.vars.outputs.VERSION }}.asar
-          asset_name: app-${{ steps.vars.outputs.VERSION }}.asar
-          asset_content_type: application/octet-stream
+          gh release create "$TAG" \
+            --title "Release: ${VER}" \
+            "${NOTES[@]}" \
+            "release/${VER}/JapaneseImeTool Setup ${VER}.exe" \
+            "release/${VER}/JapaneseImeTool Portable ${VER}.exe" \
+            "release/${VER}/app-${VER}.asar" \
+            version.json
 
-      - name: Upload version.json (update manifest)
-        if: steps.auto_release.outputs.released == 'true'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.auto_release.outputs.upload_url }}
-          asset_path: version.json
-          asset_name: version.json
-          asset_content_type: application/json
+          echo "Release 创建完成：https://github.com/${{ github.repository }}/releases/tag/${TAG}"
