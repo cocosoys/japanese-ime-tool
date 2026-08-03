@@ -5,7 +5,7 @@ name: Build and Release
 #  1) 在 Windows 上构建 NSIS 安装版 + 便携版 + app-x.y.z.asar（输出到 release/x.y.z/）
 #  2) 用 gh release create 按 commit 版本号自动创建 GitHub Release
 #     - 描述取自 CHANGELOG.md 中 "## v<x.y.z>" 小节（找不到则自动生成）
-#     - 把三件套 + version.json 上传为 Release 资产
+#     - 把三件套（Setup / Portable / asar）上传为 Release 资产
 #  3) 步骤幂等：重跑时若同名 release/tag 已存在会先清理，便于修复后重新发布
 #
 # 触发一次发布的本地操作：
@@ -84,7 +84,6 @@ jobs:
             "${NOTES[@]}" \
             "release/${VER}/JapaneseImeTool Setup ${VER}.exe" \
             "release/${VER}/JapaneseImeTool Portable ${VER}.exe" \
-            "release/${VER}/app-${VER}.asar" \
-            version.json
+            "release/${VER}/app-${VER}.asar"
 
           echo "Release 创建完成：https://github.com/${{ github.repository }}/releases/tag/${TAG}"
