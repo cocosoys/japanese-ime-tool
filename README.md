@@ -109,13 +109,21 @@ japanese-ime-tool/
 ├── renderer/                    # 界面（HTML/CSS/JS）
 ├── src/
 │   ├── api/                     # 本地 HTTP API 服务
-│   ├── implementations/binding/ # 绑定策略（manual/qwerty/qwerFlow…）
-│   ├── implementations/exporter/ # 导出器（mschxudp / UDL / dat）
+│   ├── implementations/         # 绑定策略 / 导出器 / 解析器 / 来源
 │   ├── services/                # 导入服务
-│   └── store/                   # 配置存储（config.yaml）
+│   ├── store/                   # 配置存储（config.yaml）
+│   └── updater/                 # 应用内自动更新（读取 version.json + asar 热替换）
+├── scripts/
+│   ├── build.mjs                # 构建编排（混淆 + 打包 + 归档 + 抽取 asar）
+│   ├── obfuscate.mjs            # 代码混淆
+│   └── gen_icon.py              # 图标生成
+├── tools/                       # 开发 / 集成测试辅助脚本
 ├── docs/
 │   └── api-docs.html            # 本地 API 文档（规范样式）
-└── data/lang/                   # 多语言包（zh-CN/zh-TW/en/ja/ko）
+├── data/lang/                   # 多语言包（zh-CN/zh-TW/en/ja/ko）
+├── .github/workflows/           # CI 自动构建与发布
+├── CHANGELOG.md                 # 版本变更记录
+└── version.json                 # 更新检测清单（自动更新读取）
 ```
 
 ## ⚠️ 注意事项
@@ -125,6 +133,20 @@ japanese-ime-tool/
 - 抓取功能依赖第三方网站结构，可能随对方改版失效，请留意更新。
 - 批次目录按 `年-月-日_时分秒_毫秒` 命名（如 `2026-07-31_114932_1785469772230`）；历史旧格式目录（`年-月-日_时分`）仍被兼容识别。
 - 写入时同时维护 UDL / EUDP / machxudp 三个文件且按「编码+短语」一致去重，避免因三方条目数不一致导致输入法设置中「编辑失败」。
+
+## 📦 构建与发布
+
+```bash
+# 本地构建（混淆 → NSIS 安装版 + 便携版 → 归档到 release/<version>/，并抽取 app-<version>.asar）
+npm run dist
+```
+
+- 产物输出到 `release/<version>/` 目录：
+  - `JapaneseImeTool Setup <version>.exe` —— NSIS 安装版
+  - `JapaneseImeTool Portable <version>.exe` —— 免安装便携版
+  - `app-<version>.asar` —— 应用归档（用于自动更新热替换）
+- **自动发布**：在 `main` 分支推送提交信息形如 `Release: x.y.z` 的提交，GitHub Actions 会自动构建并创建 GitHub Release，将以上三件套作为资产上传。**应用内自动更新**读取仓库根 `version.json` 检测新版本，并下载 `app-<version>.asar` 完成热替换。
+- 下载入口：仓库的 **Releases** 页面提供 Setup（安装版）与 Portable（免安装版）。
 
 ## 📄 许可
 

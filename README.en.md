@@ -106,13 +106,21 @@ japanese-ime-tool/
 ├── renderer/                    # UI (HTML/CSS/JS)
 ├── src/
 │   ├── api/                     # Local HTTP API service
-│   ├── implementations/binding/ # Binding strategies (manual/qwerty/qwerFlow…)
-│   ├── implementations/exporter/ # Exporters (mschxudp / UDL / dat)
+│   ├── implementations/         # Binding strategies / exporters / parsers / sources
 │   ├── services/                # Import service
-│   └── store/                   # Config storage (config.yaml)
+│   ├── store/                   # Config storage (config.yaml)
+│   └── updater/                 # In-app auto-update (read version.json + asar hot-swap)
+├── scripts/
+│   ├── build.mjs                # Build orchestration (obfuscate + package + archive + extract asar)
+│   ├── obfuscate.mjs            # Code obfuscation
+│   └── gen_icon.py              # Icon generation
+├── tools/                       # Dev / integration-test helper scripts
 ├── docs/
 │   └── api-docs.html            # Local API docs (styled)
-└── data/lang/                   # Language packs (zh-CN/zh-TW/en/ja/ko)
+├── data/lang/                   # Language packs (zh-CN/zh-TW/en/ja/ko)
+├── .github/workflows/           # CI auto build & release
+├── CHANGELOG.md                 # Version changelog
+└── version.json                 # Update manifest (read by auto-update)
 ```
 
 ## ⚠️ Notes
@@ -122,6 +130,20 @@ japanese-ime-tool/
 - The scraping feature depends on a third-party site's structure and may break if it changes.
 - Batch folders are named `YYYY-MM-DD_HHmmss_ms` (e.g. `2026-07-31_114932_1785469772230`); legacy `YYYY-MM-DD_HHmm` folders are still recognized.
 - The three lexicon files (UDL / EUDP / machxudp) are written together and deduplicated consistently by code+phrase, avoiding "edit failed" in the IME settings caused by mismatched entry counts.
+
+## 📦 Build & Release
+
+```bash
+# Local build (obfuscate → NSIS installer + portable → archive to release/<version>/, extract app-<version>.asar)
+npm run dist
+```
+
+- Artifacts are written to `release/<version>/`:
+  - `JapaneseImeTool Setup <version>.exe` — NSIS installer
+  - `JapaneseImeTool Portable <version>.exe` — portable (no install) build
+  - `app-<version>.asar` — app archive (used for auto-update hot-swap)
+- **Auto-release**: pushing a commit whose message is exactly `Release: x.y.z` on `main` triggers GitHub Actions to build and create a GitHub Release, uploading the three artifacts above. The **in-app auto-update** reads `version.json` at the repo root to detect new versions and downloads `app-<version>.asar` for a hot-swap.
+- Downloads: the repo's **Releases** page provides the Setup (installer) and Portable builds.
 
 ## 📄 License
 

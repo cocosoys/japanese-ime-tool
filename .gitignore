@@ -28,4 +28,3 @@ release/
 build/
 # 旧流程遗留的仓库根 asar（新流程 asar 已在 release/<version>/ 内，此行仅防误提交遗留文件）
 app-1.0.0.asar
-nul

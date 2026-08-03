@@ -106,13 +106,21 @@ japanese-ime-tool/
 ├── renderer/                    # UI（HTML/CSS/JS）
 ├── src/
 │   ├── api/                     # ローカル HTTP API サービス
-│   ├── implementations/binding/ # バインディング戦略（manual/qwerty/qwerFlow…）
-│   ├── implementations/exporter/ # エクスポーター（mschxudp / UDL / dat）
+│   ├── implementations/         # バインディング戦略 / エクスポーター / パーサー / ソース
 │   ├── services/                # 取り込みサービス
-│   └── store/                   # 設定ストレージ（config.yaml）
+│   ├── store/                   # 設定ストレージ（config.yaml）
+│   └── updater/                 # アプリ内自動更新（version.json 読込 + asar ホットスワップ）
+├── scripts/
+│   ├── build.mjs                # ビルド統括（難読化 + パッケージ + アーカイブ + asar 抽出）
+│   ├── obfuscate.mjs            # コード難読化
+│   └── gen_icon.py              # アイコン生成
+├── tools/                       # 開発 / 統合テスト用ヘルパースクリプト
 ├── docs/
 │   └── api-docs.html            # ローカル API ドキュメント（スタイル付き）
-└── data/lang/                   # 言語パック（zh-CN/zh-TW/en/ja/ko）
+├── data/lang/                   # 言語パック（zh-CN/zh-TW/en/ja/ko）
+├── .github/workflows/           # CI 自動ビルド・リリース
+├── CHANGELOG.md                 # バージョン変更履歴
+└── version.json                 # 更新マニフェスト（自動更新が読込）
 ```
 
 ## ⚠️ 注意
@@ -122,6 +130,20 @@ japanese-ime-tool/
 - 取得機能はサードパーティサイトの構造に依存し、変更で動作しなくなる場合があります。
 - バッチディレクトリは `年-月-日_時分秒_ミリ秒`（例 `2026-07-31_114932_1785469772230`）で命名。旧形式（`年-月-日_時分`）も引き続き認識されます。
 - 書き込み時は UDL / EUDP / machxudp の 3 ファイルを「コード+フレーズ」で一貫して重複排除しつつ同時に更新。エントリ数不一致による IME 設定の「編集失敗」を防ぎます。
+
+## 📦 ビルドとリリース
+
+```bash
+# ローカルビルド（難読化 → NSIS インストーラ + ポータブル → release/<version>/ にアーカイブ、app-<version>.asar を抽出）
+npm run dist
+```
+
+- 成果物は `release/<version>/` に出力されます：
+  - `JapaneseImeTool Setup <version>.exe` — NSIS インストーラ
+  - `JapaneseImeTool Portable <version>.exe` — ポータブル（インストール不要）ビルド
+  - `app-<version>.asar` — アプリアーカイブ（自動更新のホットスワップに使用）
+- **自動リリース**：`main` ブランチにメッセージが `Release: x.y.z` のコミットを push すると、GitHub Actions が自動的にビルドし GitHub Release を作成し、上記 3 ファイルをアップロードします。**アプリ内自動更新**はリポジトリルートの `version.json` を読んで新バージョンを検出し、`app-<version>.asar` をダウンロードしてホットスワップします。
+- ダウンロード：リポジトリの **Releases** ページから Setup（インストーラ）と Portable を入手できます。
 
 ## 📄 ライセンス
 

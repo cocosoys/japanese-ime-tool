@@ -106,13 +106,21 @@ japanese-ime-tool/
 ├── renderer/                    # UI (HTML/CSS/JS)
 ├── src/
 │   ├── api/                     # 로컬 HTTP API 서비스
-│   ├── implementations/binding/ # 바인딩 전략 (manual/qwerty/qwerFlow…)
-│   ├── implementations/exporter/ # 내보내기 (mschxudp / UDL / dat)
+│   ├── implementations/         # 바인딩 전략 / 익스포터 / 파서 / 소스
 │   ├── services/                # 가져오기 서비스
-│   └── store/                   # 설정 저장 (config.yaml)
+│   ├── store/                   # 설정 저장소 (config.yaml)
+│   └── updater/                 # 앱 내 자동 업데이트 (version.json 읽기 + asar 핫스왑)
+├── scripts/
+│   ├── build.mjs                # 빌드 오케스트레이션 (난독화 + 패키징 + 보관 + asar 추출)
+│   ├── obfuscate.mjs            # 코드 난독화
+│   └── gen_icon.py              # 아이콘 생성
+├── tools/                       # 개발 / 통합 테스트 헬퍼 스크립트
 ├── docs/
 │   └── api-docs.html            # 로컬 API 문서 (스타일 적용)
-└── data/lang/                   # 언어 팩 (zh-CN/zh-TW/en/ja/ko)
+├── data/lang/                   # 언어 팩 (zh-CN/zh-TW/en/ja/ko)
+├── .github/workflows/           # CI 자동 빌드 및 릴리스
+├── CHANGELOG.md                 # 버전 변경 이력
+└── version.json                 # 업데이트 매니페스트 (자동 업데이트가 읽음)
 ```
 
 ## ⚠️ 주의
@@ -122,6 +130,20 @@ japanese-ime-tool/
 - 수집 기능은 외부 사이트 구조에 의존하며 변경 시 동작하지 않을 수 있음.
 - 배치 폴더는 `년-월-일_시분초_밀리초`(예: `2026-07-31_114932_1785469772230`)로 명명. 이전 형식(`년-월-일_시분`)도 계속 인식됩니다.
 - 쓰기 시 UDL / EUDP / machxudp 3개 파일을 "코드+구문"으로 일관되게 중복 제거하며 동시에 갱신. 항목 수 불일치로 인한 IME 설정의 "편집 실패"를 방지합니다.
+
+## 📦 빌드 및 릴리스
+
+```bash
+# 로컬 빌드 (난독화 → NSIS 설치판 + 포터블 → release/<version>/ 에 보관, app-<version>.asar 추출)
+npm run dist
+```
+
+- 결과물은 `release/<version>/` 에 출력됩니다：
+  - `JapaneseImeTool Setup <version>.exe` — NSIS 설치판
+  - `JapaneseImeTool Portable <version>.exe` — 설치 불필요 포터블 빌드
+  - `app-<version>.asar` — 앱 아카이브 (자동 업데이트 핫스왑에 사용)
+- **자동 릴리스**：`main` 브랜치에 메시지가 `Release: x.y.z` 인 커밋을 푸시하면 GitHub Actions 가 자동으로 빌드하고 GitHub Release 를 만들어 위 3개 파일을 업로드합니다. **앱 내 자동 업데이트**는 저장소 루트의 `version.json` 을 읽어 새 버전을 감지하고 `app-<version>.asar` 를 다운로드해 핫스왑합니다.
+- 다운로드：저장소 **Releases** 페이지에서 Setup(설치판)과 Portable 을 받을 수 있습니다.
 
 ## 📄 라이선스
 

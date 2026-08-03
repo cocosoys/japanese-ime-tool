@@ -101,18 +101,26 @@ npm test
 
 ```
 japanese-ime-tool/
-├── main.js                      # Electron 主程序
+├── main.js                      # Electron 主程式
 ├── preload.cjs                  # 渲染程序橋接
 ├── renderer/                    # 介面（HTML/CSS/JS）
 ├── src/
 │   ├── api/                     # 本地 HTTP API 服務
-│   ├── implementations/binding/ # 綁定策略（manual/qwerty/qwerFlow…）
-│   ├── implementations/exporter/ # 匯出器（mschxudp / UDL / dat）
+│   ├── implementations/         # 綁定策略 / 匯出器 / 解析器 / 來源
 │   ├── services/                # 匯入服務
-│   └── store/                   # 設定儲存（config.yaml）
+│   ├── store/                   # 設定儲存（config.yaml）
+│   └── updater/                 # 應用內自動更新（讀取 version.json + asar 熱替換）
+├── scripts/
+│   ├── build.mjs                # 構建編排（混淆 + 打包 + 歸檔 + 抽取 asar）
+│   ├── obfuscate.mjs            # 程式碼混淆
+│   └── gen_icon.py              # 圖示生成
+├── tools/                       # 開發 / 整合測試輔助腳本
 ├── docs/
-│   └── api-docs.html            # 本地 API 文件（規範樣式）
-└── data/lang/                   # 多語言包（zh-CN/zh-TW/en/ja/ko）
+│   └── api-docs.html            # 本地 API 文件
+├── data/lang/                   # 多語言包（zh-CN/zh-TW/en/ja/ko）
+├── .github/workflows/           # CI 自動構建與發布
+├── CHANGELOG.md                 # 版本變更記錄
+└── version.json                 # 更新偵測清單（自動更新讀取）
 ```
 
 ## ⚠️ 注意事項
@@ -122,6 +130,20 @@ japanese-ime-tool/
 - 擷取功能依賴第三方網站結構，可能隨對方改版失效，請留意更新。
 - 批次目錄依 `年-月-日_時分秒_毫秒` 命名（如 `2026-07-31_114932_1785469772230`）；歷史舊格式目錄（`年-月-日_時分`）仍被相容識別。
 - 寫入時同時維護 UDL / EUDP / machxudp 三個檔案且依「編碼+短語」一致去重，避免因三方條目數不一致導致輸入法設定中「編輯失敗」。
+
+## 📦 構建與發布
+
+```bash
+# 本地構建（混淆 → NSIS 安裝版 + 便攜版 → 歸檔到 release/<version>/，並抽取 app-<version>.asar）
+npm run dist
+```
+
+- 產物輸出到 `release/<version>/` 目錄：
+  - `JapaneseImeTool Setup <version>.exe` —— NSIS 安裝版
+  - `JapaneseImeTool Portable <version>.exe` —— 免安裝便攜版
+  - `app-<version>.asar` —— 應用歸檔（用於自動更新熱替換）
+- **自動發布**：在 `main` 分支推送提交資訊形如 `Release: x.y.z` 的提交，GitHub Actions 會自動構建並建立 GitHub Release，將以上三件套作為資產上傳。**應用內自動更新**讀取倉庫根 `version.json` 偵測新版本，並下載 `app-<version>.asar` 完成熱替換。
+- 下載入口：倉庫的 **Releases** 頁面提供 Setup（安裝版）與 Portable（免安裝版）。
 
 ## 📄 授權
 
