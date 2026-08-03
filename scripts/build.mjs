@@ -42,6 +42,10 @@ async function buildTarget(target) {
   log(`构建 ${target} → ${rel(outBase)}`);
   await build({
     projectDir: root,
+    // 关闭 electron-builder 在 CI 下的隐式发布：
+    // 发布改由 GitHub Action（auto-release + upload-release-asset）负责，
+    // 否则 electron-builder 检测到 CI 会尝试用 GH_TOKEN 自动发布而缺少 token 报错。
+    publish: false,
     config: {
       ...pkgBuild,
       directories: { ...(pkgBuild.directories || {}), output: outBase },

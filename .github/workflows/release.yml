@@ -34,6 +34,10 @@ jobs:
         run: npm ci
 
       - name: Build (NSIS + Portable + asar → release/<version>/)
+        env:
+          # CI 上无代码签名证书，禁用 electron-builder 自动发现/使用证书签名，
+          # 避免对 exe 执行不可控的 signtool 签名；签名可在本地用 scripts/local-release 完成。
+          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npm run dist
 
       - name: Derive version & validate consistency
