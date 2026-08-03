@@ -257,13 +257,21 @@ async function persistUsed() {
 
 function sortedView() {
   // 排序策略：
-  //   1. 「所有数据批次」（entries 带 __batch 字段）：先按批次名升序消耗（最早批次优先），
-  //      同批次内再按「未使用在前」
+  //   1. 「所有数据批次」（entries 带 __batch 字段）：先按「未使用在前」，
+  //      同状态内再按批次名升序（早批次优先消耗）
   //   2. 单批次模式（entries 无 __batch）：直接按「未使用在前」
+  const isAll = state.__allKeyToBatch;
   return [...state.entries].sort((a, b) => {
+    // __all__ 模式：已用/未用 状态优先，确保所有未使用条目排在已使用条目之前
+    if (isAll) {
+      const au = isEntryUsed(a) ? 1 : 0;
+      const bu = isEntryUsed(b) ? 1 : 0;
+      if (au !== bu) return au - bu;
+    }
+    // 同状态（或单批次模式）再按批次升序
     const ab = a.__batch || '';
     const bb = b.__batch || '';
-    if (ab !== bb) return ab < bb ? -1 : 1;   // 早批次在前（批次目录名按时间字符串升序等价于时间升序）
+    if (ab !== bb) return ab < bb ? -1 : 1;
     return (isEntryUsed(a) ? 1 : 0) - (isEntryUsed(b) ? 1 : 0);
   });
 }
